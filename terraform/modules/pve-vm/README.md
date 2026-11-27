@@ -60,7 +60,7 @@ module "hq_fw01" {
 | `tpm` | bool | `false` | TPM 2.0 |
 | `disks` | list(object) | `[{scsi0, 32}]` | `interface`, `size_gb` |
 | `datastore_id` | string | `local-lvm` | Disks, EFI, TPM |
-| `cloud_init` | object | `null` | `ipv4_cidr` (or `dhcp`), `gateway`, `dns_servers`, `dns_domain`, `username`, `ssh_keys` |
+| `cloud_init` | object | `null` | `type` (`nocloud` / `configdrive2` for Windows), `ipv4_cidr` (or `dhcp`), `gateway`, `dns_servers`, `dns_domain`, `username` (omit = no user), `ssh_keys` |
 | `tags`, `description`, `node_name` | | | Metadata / placement |
 | `started`, `on_boot`, `startup_order`, `agent_enabled` | | | Lifecycle |
 
@@ -73,5 +73,5 @@ module "hq_fw01" {
 ```bash
 cd terraform/modules/pve-vm
 terraform init -backend=false
-terraform test   # 6 plan-only runs against a mocked provider
+terraform test   # 8 plan-only runs against a mocked provider
 ```

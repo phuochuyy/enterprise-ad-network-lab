@@ -166,14 +166,25 @@ variable "agent_enabled" {
 }
 
 variable "cloud_init" {
-  description = "Cloud-init settings for Linux templates. Null = no cloud-init drive."
+  description = <<-EOT
+    Cloud-init drive. Null = none. Linux templates use type "nocloud" and set username;
+    Windows templates (cloudbase-init) need type "configdrive2" and no username.
+    (An explicit null on an optional attribute with a default is replaced by the default,
+    so username has no default: omit it to create no user.)
+  EOT
   type = object({
+    type        = optional(string, "nocloud")
     ipv4_cidr   = string # e.g. 172.16.20.61/24 or "dhcp"
     gateway     = optional(string)
     dns_servers = optional(list(string), [])
     dns_domain  = optional(string)
-    username    = optional(string, "ansible")
+    username    = optional(string)
     ssh_keys    = optional(list(string), [])
   })
   default = null
+
+  validation {
+    condition     = var.cloud_init == null || contains(["nocloud", "configdrive2"], try(var.cloud_init.type, "nocloud"))
+    error_message = "cloud_init.type must be nocloud or configdrive2."
+  }
 }

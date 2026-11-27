@@ -104,6 +104,7 @@ resource "proxmox_virtual_environment_vm" "this" {
     for_each = var.cloud_init == null ? [] : [var.cloud_init]
     content {
       datastore_id = var.datastore_id
+      type         = initialization.value.type
 
       ip_config {
         ipv4 {
@@ -117,9 +118,12 @@ resource "proxmox_virtual_environment_vm" "this" {
         domain  = initialization.value.dns_domain
       }
 
-      user_account {
-        username = initialization.value.username
-        keys     = initialization.value.ssh_keys
+      dynamic "user_account" {
+        for_each = initialization.value.username == null ? [] : [initialization.value]
+        content {
+          username = user_account.value.username
+          keys     = user_account.value.ssh_keys
+        }
       }
     }
   }
