@@ -13,7 +13,7 @@ Opinionated Proxmox VE virtual machine for this lab (and its companion repos), b
 
 ```hcl
 module "hq_dc01" {
-  source = "git::https://github.com/phuochuyy/enterprise-ad-network-lab.git//terraform/modules/pve-vm?ref=v1.0.0"
+  source = "git::https://github.com/phuochuyy/enterprise-ad-network-lab.git//terraform/modules/pve-vm?ref=modules/pve-vm/v1.0.0"
 
   name           = "hq-dc01"
   vm_id          = 201
