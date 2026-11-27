@@ -1,0 +1,8 @@
+{"version": 2, "width": 80, "height": 24, "timestamp": 1795791329, "idle_time_limit": 2.0, "env": {"SHELL": "/bin/bash", "TERM": "xterm-ghostty"}, "title": "tf-apply-site-bridges"}
+[0.135746, "o", "\u001b[0m\u001b[1mproxmox_network_linux_bridge.site[\"vmbr10\"]: Creating...\u001b[0m\u001b[0m\r\n\u001b[0m\u001b[1mproxmox_network_linux_bridge.site[\"vmbr20\"]: Creating...\u001b[0m\u001b[0m\r\n"]
+[1.274802, "o", "\u001b[0m\u001b[1mproxmox_network_linux_bridge.site[\"vmbr10\"]: Creation complete after 1s [id=pve:vmbr10]\u001b[0m\r\n"]
+[2.373046, "o", "\u001b[0m\u001b[1mproxmox_network_linux_bridge.site[\"vmbr20\"]: Creation complete after 2s [id=pve:vmbr20]\u001b[0m\r\n"]
+[2.382715, "o", "\u001b[0m\u001b[1m\u001b[32m\r\nApply complete! Resources: 2 added, 0 changed, 0 destroyed.\u001b[0m\r\n\u001b[0m\u001b[1m\u001b[32m\r\nOutputs:\r\n\r\n\u001b[0msite_bridges = {\r\n  \"vmbr10\" = \"HQ trunk - VLAN 10 mgmt, 20 servers, 30 users, 40 dmz, 50 storage, 60 live-migration\"\r\n  \"vmbr20\" = \"Branch trunk - VLAN 120 servers, 130 users\"\r\n}\r\n"]
+[2.385047, "o", "\r\n"]
+[2.385058, "o", "$ ip -br link show type bridge\r\n"]
+[2.386337, "o", "\u001b[36mvmbr0            \u001b[0m\u001b[31mDOWN           \u001b[0m\u001b[33m08:8f:c3:04:87:f3 \u001b[0m<NO-CARRIER,BROADCAST,MULTICAST,UP> \r\n\u001b[36mvmbr1            \u001b[0mUNKNOWN        \u001b[33m4a:d3:6a:b3:23:c6 \u001b[0m<BROADCAST,MULTICAST,UP,LOWER_UP> \r\n\u001b[36mvmbr10           \u001b[0mUNKNOWN        \u001b[33me6:a0:e1:a0:e4:67 \u001b[0m<BROADCAST,MULTICAST,UP,LOWER_UP> \r\n\u001b[36mvmbr20           \u001b[0mUNKNOWN        \u001b[33mea:11:03:e4:4d:39 \u001b[0m<BROADCAST,MULTICAST,UP,LOWER_UP> \r\n"]
