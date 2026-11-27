@@ -11,3 +11,4 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), versioning: [S
 - Issue / PR templates, including an incident (RCA) template
 - Evidence capture scripts: `scripts/media/shot.sh`, `rec.sh`, `cast.sh`
 - ADR-0001 (record decisions), ADR-0002 (platform and tooling)
+- Network & IP design (`docs/architecture.md`) and ADR-0003 (addressing, naming, AD domain name)
