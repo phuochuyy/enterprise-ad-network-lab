@@ -26,6 +26,7 @@ locals {
       url          = "https://fedorapeople.org/groups/virt/virtio-win/direct-downloads/archive-virtio/virtio-win-0.1.302-1/virtio-win-0.1.302.iso"
       checksum     = null
       decompress   = null
+      timeout      = 7200 # fedorapeople.org serves ~270 KB/s; 0.9 GB timed out at 1 h
     }
     opnsense = {
       content_type = "iso"
@@ -56,6 +57,6 @@ resource "proxmox_download_file" "image" {
   checksum                = each.value.checksum
   checksum_algorithm      = each.value.checksum == null ? null : "sha256"
   decompression_algorithm = each.value.decompress
-  upload_timeout          = 3600 # 5 GB over the host's Wi-Fi
+  upload_timeout          = try(each.value.timeout, 3600) # 5 GB over the host's Wi-Fi
   overwrite               = false
 }
