@@ -51,3 +51,24 @@ jobs:
 
       - run: terraform init -backend=false -input=false
       - run: terraform test
+
+  packer-validate:
+    name: packer-validate
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        template: [ws2022-core, ws2022-desktop, win11]
+    defaults:
+      run:
+        working-directory: packer/windows
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: hashicorp/setup-packer@v3
+
+      # validate needs a value; a throwaway random one keeps literals out of the repo (gitleaks)
+      - run: echo "PKR_VAR_admin_password=$(openssl rand -hex 16)" >> "$GITHUB_ENV"
+
+      - run: packer init .
+      - run: packer fmt -check -diff -recursive .
+      - run: packer validate -var-file=vars/${{ matrix.template }}.pkrvars.hcl .
