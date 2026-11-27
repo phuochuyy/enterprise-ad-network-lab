@@ -40,3 +40,6 @@ docs/media/raw/
 .idea/
 *.swp
 .DS_Store
+
+# Modules do not pin providers; only root configs commit their lock file
+terraform/modules/**/.terraform.lock.hcl
