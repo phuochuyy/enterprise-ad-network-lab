@@ -106,7 +106,7 @@ source "proxmox-iso" "windows" {
   winrm_port     = 5985
   winrm_use_ssl  = false
   winrm_insecure = true
-  winrm_timeout  = "2h"
+  winrm_timeout  = "1h" # install ~15 min; fail fast if bootstrap breaks
 }
 
 build {

@@ -32,7 +32,18 @@ Get-NetIPAddress -InterfaceIndex $nic.ifIndex -AddressFamily IPv4 -ErrorAction S
     Remove-NetIPAddress -Confirm:$false -ErrorAction SilentlyContinue
 New-NetIPAddress -InterfaceIndex $nic.ifIndex -IPAddress '${build_ip}' -PrefixLength ${build_prefix} -DefaultGateway '${build_gateway}' | Out-Null
 Set-DnsClientServerAddress -InterfaceIndex $nic.ifIndex -ServerAddresses '${build_dns}'
-Set-NetConnectionProfile -InterfaceIndex $nic.ifIndex -NetworkCategory Private
+
+# Windows refuses to change the category while the network is still "Identifying..." (seen on
+# the first build). Retry for up to 2 minutes, but never fail: WinRM below does not depend on it
+# (SkipNetworkProfileCheck + firewall rule on all profiles).
+for ($i = 0; $i -lt 24; $i++) {
+    try {
+        Set-NetConnectionProfile -InterfaceIndex $nic.ifIndex -NetworkCategory Private -ErrorAction Stop
+        break
+    } catch {
+        Start-Sleep -Seconds 5
+    }
+}
 
 # --- 3. WinRM for Packer -------------------------------------------------------
 # Remote UAC filtering would strip admin rights from local-account WinRM sessions.
