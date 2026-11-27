@@ -12,6 +12,7 @@ vault-pass*
 *.tfstate
 *.tfstate.*
 *.tfplan
+tfplan
 crash.log
 crash.*.log
 override.tf
@@ -43,3 +44,7 @@ docs/media/raw/
 
 # Modules do not pin providers; only root configs commit their lock file
 terraform/modules/**/.terraform.lock.hcl
+
+# Packer build logs and manifests (may contain host details)
+packer/**/logs/
+packer/**/manifest.json

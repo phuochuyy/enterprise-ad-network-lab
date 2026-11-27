@@ -8,9 +8,8 @@ trim_trailing_whitespace = true
 indent_style = space
 indent_size = 2
 
-[*.{ps1,psm1}]
+[*.{ps1,psm1,pkrtpl}]
 indent_size = 4
-end_of_line = crlf
 
 [*.md]
 trim_trailing_whitespace = false
