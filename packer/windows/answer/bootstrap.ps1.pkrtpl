@@ -1,0 +1,53 @@
+# First-logon bootstrap for the Packer build VM (runs once, as Administrator).
+# Rendered by Packer: build network values are injected; nothing secret in here.
+#   1. virtio guest tools (all drivers) + QEMU guest agent
+#   2. temporary static IP (vmbr1 has no DHCP) - discarded by sysprep
+#   3. WinRM over HTTP for Packer only; build.ps1 later moves it to HTTPS
+$ErrorActionPreference = 'Stop'
+Start-Transcript -Path C:\Windows\Temp\bootstrap-transcript.log -Append
+
+function Find-Media([string]$RelativePath) {
+    foreach ($drive in Get-PSDrive -PSProvider FileSystem) {
+        $candidate = Join-Path $drive.Root $RelativePath
+        if (Test-Path $candidate) { return $candidate }
+    }
+    throw "Not found on any drive: $RelativePath"
+}
+
+# --- 1. Drivers and guest agent ---------------------------------------------
+$virtioMsi = Find-Media 'virtio-win-gt-x64.msi'
+Start-Process msiexec.exe -Wait -ArgumentList "/i `"$virtioMsi`" /qn /norestart ADDLOCAL=ALL"
+$agentMsi = Find-Media 'guest-agent\qemu-ga-x86_64.msi'
+Start-Process msiexec.exe -Wait -ArgumentList "/i `"$agentMsi`" /qn /norestart"
+
+# --- 2. Build network ---------------------------------------------------------
+$deadline = (Get-Date).AddMinutes(5)
+do {
+    $nic = Get-NetAdapter -Physical | Where-Object Status -eq 'Up' | Select-Object -First 1
+    if (-not $nic) { Start-Sleep -Seconds 5 }
+} until ($nic -or (Get-Date) -gt $deadline)
+if (-not $nic) { throw 'No network adapter came up after installing virtio drivers' }
+
+Get-NetIPAddress -InterfaceIndex $nic.ifIndex -AddressFamily IPv4 -ErrorAction SilentlyContinue |
+    Remove-NetIPAddress -Confirm:$false -ErrorAction SilentlyContinue
+New-NetIPAddress -InterfaceIndex $nic.ifIndex -IPAddress '${build_ip}' -PrefixLength ${build_prefix} -DefaultGateway '${build_gateway}' | Out-Null
+Set-DnsClientServerAddress -InterfaceIndex $nic.ifIndex -ServerAddresses '${build_dns}'
+Set-NetConnectionProfile -InterfaceIndex $nic.ifIndex -NetworkCategory Private
+
+# --- 3. WinRM for Packer -------------------------------------------------------
+# Remote UAC filtering would strip admin rights from local-account WinRM sessions.
+New-ItemProperty -Path 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System' `
+    -Name LocalAccountTokenFilterPolicy -PropertyType DWord -Value 1 -Force | Out-Null
+
+Enable-PSRemoting -SkipNetworkProfileCheck -Force
+Set-Item WSMan:\localhost\Service\AllowUnencrypted -Value $true   # build only; reverted in cleanup.ps1
+Set-Item WSMan:\localhost\Service\Auth\Basic -Value $true          # build only; reverted in cleanup.ps1
+Set-Item WSMan:\localhost\MaxTimeoutms -Value 1800000
+Set-Item WSMan:\localhost\Shell\MaxMemoryPerShellMB -Value 2048
+New-NetFirewallRule -Name 'WinRM-HTTP-Build' -DisplayName 'WinRM HTTP (Packer build)' `
+    -Direction Inbound -Protocol TCP -LocalPort 5985 -Action Allow -Profile Any | Out-Null
+Set-Service -Name WinRM -StartupType Automatic
+Restart-Service WinRM
+
+Write-Output "bootstrap complete: $(Get-Date -Format o)"
+Stop-Transcript
