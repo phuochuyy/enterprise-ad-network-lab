@@ -66,8 +66,18 @@ jobs:
 
       - uses: hashicorp/setup-packer@v3
 
-      # validate needs a value; a throwaway random one keeps literals out of the repo (gitleaks)
-      - run: echo "PKR_VAR_admin_password=$(openssl rand -hex 16)" >> "$GITHUB_ENV"
+      # validate needs connection settings and a password; use an unroutable endpoint and
+      # throwaway random values so no secret-looking literal lives in the repo (gitleaks).
+      - name: Fake credentials for validate
+        run: |
+          pw="$(openssl rand -hex 16)"; tok="$(openssl rand -hex 16)"
+          echo "::add-mask::$pw"; echo "::add-mask::$tok"
+          {
+            echo "PKR_VAR_admin_password=$pw"
+            echo "PROXMOX_TOKEN=$tok"
+            echo "PROXMOX_USERNAME=ci@pve!validate"
+            echo "PROXMOX_URL=https://pve.invalid:8006/api2/json"
+          } >> "$GITHUB_ENV"
 
       - run: packer init .
       - run: packer fmt -check -diff -recursive .
