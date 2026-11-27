@@ -44,3 +44,4 @@ repos:
     rev: v0.11.0.1-1
     hooks:
       - id: shellcheck
+        args: [-x] # follow sourced helpers such as scripts/media/_common.sh
