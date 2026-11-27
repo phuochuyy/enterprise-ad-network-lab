@@ -1,0 +1,10 @@
+config:
+  default: true
+  MD013: false        # long lines are fine in docs/tables
+  MD033:              # allow a few HTML tags used for media layout
+    allowed_elements: [img, video, details, summary, br, p, a, kbd]
+  MD041: false        # first line may be a badge row
+  MD024:
+    siblings_only: true
+ignores:
+  - CHANGELOG.md
