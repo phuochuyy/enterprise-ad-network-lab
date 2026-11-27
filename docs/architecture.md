@@ -12,7 +12,7 @@ flowchart TB
 
   wan --- fwhq["hq-fw01 · OPNsense<br/>WAN 10.10.10.11"]
   wan --- fwbr["br-fw01 · OPNsense<br/>WAN 10.10.10.12"]
-  fwhq <-. "WireGuard site-to-site<br/>172.31.255.0/30" .-> fwbr
+  fwhq <-->|"WireGuard site-to-site<br/>172.31.255.0/30"| fwbr
 
   subgraph HQ["HQ · vmbr10 (VLAN-aware trunk)"]
     direction TB
