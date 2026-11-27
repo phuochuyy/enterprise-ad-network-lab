@@ -1,0 +1,29 @@
+name: Incident
+description: Something broke in the lab - track it and write a short RCA
+labels: ["type:bug"]
+body:
+  - type: input
+    id: impact
+    attributes:
+      label: Impact
+      description: Which service/users were affected and for how long?
+    validations:
+      required: true
+  - type: textarea
+    id: timeline
+    attributes:
+      label: Timeline
+      value: |
+        - HH:MM detected -
+        - HH:MM mitigated -
+        - HH:MM resolved -
+  - type: textarea
+    id: root_cause
+    attributes:
+      label: Root cause (5 whys)
+  - type: textarea
+    id: actions
+    attributes:
+      label: Corrective / preventive actions
+      value: |
+        - [ ]
