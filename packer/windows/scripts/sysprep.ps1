@@ -7,11 +7,9 @@ if (-not (Test-Path $unattend)) { throw "missing $unattend" }
 
 Set-Service -Name cloudbase-init -StartupType Automatic
 
-# The build used a static IP on vmbr1; make sure no clone inherits it.
-Get-NetAdapter -Physical | ForEach-Object {
-    Set-NetIPInterface -InterfaceIndex $_.ifIndex -Dhcp Enabled -ErrorAction SilentlyContinue
-    Set-DnsClientServerAddress -InterfaceIndex $_.ifIndex -ResetServerAddresses -ErrorAction SilentlyContinue
-}
+# NOTE: the temporary build IP is NOT reset here - doing so cut Packer's own WinRM session
+# before sysprep could run (build #2). Clones reset it in the specialize pass instead
+# (answer/unattend-sysprep.xml.pkrtpl).
 
 & "$env:SystemRoot\System32\Sysprep\Sysprep.exe" /generalize /oobe /quit /quiet /mode:vm "/unattend:$unattend"
 

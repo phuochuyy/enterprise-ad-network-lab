@@ -17,14 +17,21 @@
     </component>
     <component name="Microsoft-Windows-Deployment" processorArchitecture="amd64" publicKeyToken="31bf3856ad364e35" language="neutral" versionScope="nonSxS">
       <RunSynchronous>
+        <!-- Drop the template's temporary build IP, DNS and persistent default route so the clone
+             starts clean; cloudbase-init then applies the Terraform-defined address (or DHCP). -->
         <RunSynchronousCommand wcm:action="add">
           <Order>1</Order>
+          <Path>powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "Get-NetAdapter | ForEach-Object { Remove-NetIPAddress -InterfaceIndex $_.ifIndex -AddressFamily IPv4 -Confirm:$false -ErrorAction SilentlyContinue; Remove-NetRoute -InterfaceIndex $_.ifIndex -DestinationPrefix 0.0.0.0/0 -Confirm:$false -ErrorAction SilentlyContinue; Set-NetIPInterface -InterfaceIndex $_.ifIndex -Dhcp Enabled; Set-DnsClientServerAddress -InterfaceIndex $_.ifIndex -ResetServerAddresses }"</Path>
+          <Description>Reset build network</Description>
+        </RunSynchronousCommand>
+        <RunSynchronousCommand wcm:action="add">
+          <Order>2</Order>
           <Path>cmd.exe /c ""C:\Program Files\Cloudbase Solutions\Cloudbase-Init\Python\Scripts\cloudbase-init.exe" --config-file "C:\Program Files\Cloudbase Solutions\Cloudbase-Init\conf\cloudbase-init-unattend.conf" &amp;&amp; exit 1 || exit 2"</Path>
           <Description>cloudbase-init (hostname)</Description>
           <WillReboot>OnRequest</WillReboot>
         </RunSynchronousCommand>
         <RunSynchronousCommand wcm:action="add">
-          <Order>2</Order>
+          <Order>3</Order>
           <Path>net user Administrator /active:yes</Path>
           <Description>Client SKUs disable the built-in Administrator after generalize</Description>
         </RunSynchronousCommand>
