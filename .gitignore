@@ -1,0 +1,42 @@
+# --- Secrets: never commit ---
+*.tfvars
+!*.tfvars.example
+*.pem
+*.key
+.env
+vault-pass*
+**/secrets/
+
+# --- Terraform ---
+.terraform/
+*.tfstate
+*.tfstate.*
+*.tfplan
+crash.log
+crash.*.log
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+.terraformrc
+terraform.rc
+
+# --- Packer ---
+packer_cache/
+output-*/
+*.box
+
+# --- Ansible ---
+*.retry
+.ansible/
+
+# --- Media: raw videos go to GitHub Releases, not git ---
+docs/media/*.mp4
+docs/media/*.mkv
+docs/media/raw/
+
+# --- Editors / OS ---
+.vscode/
+.idea/
+*.swp
+.DS_Store
