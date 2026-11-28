@@ -18,6 +18,8 @@ opnsense_rules:
   - { iface: SERVERS, proto: TCP, src: "SERVERS:net", dst: HQ_DCS, port: PORTS_AD_TCP, descr: AD replication to HQ DC (TCP) }
   - { iface: SERVERS, proto: UDP, src: "SERVERS:net", dst: HQ_DCS, port: PORTS_AD_UDP, descr: AD replication to HQ DC (UDP) }
   - { iface: SERVERS, proto: ICMP, src: "SERVERS:net", dst: any, descr: Servers ping }
+  - { iface: SERVERS, proto: UDP, src: DCS, dst: self, port: "67", descr: DHCP replies from the DCs to the relay }
+  - { iface: SERVERS, proto: TCP, src: BR_DCS, dst: HQ_DCS, port: PORTS_DHCP_FAILOVER, descr: DHCP failover Branch DC to HQ DC }
 
   - { iface: USERS, proto: TCP, src: "USERS:net", dst: DCS, port: PORTS_AD_TCP, descr: Users to domain controllers (TCP) }
   - { iface: USERS, proto: UDP, src: "USERS:net", dst: DCS, port: PORTS_AD_UDP, descr: Users to domain controllers (UDP) }
@@ -29,6 +31,9 @@ opnsense_rules:
   - { iface: WG, proto: TCP, src: HQ_NETS, dst: BR_DCS, port: PORTS_AD_TCP, descr: HQ to Branch DC - auth and replication (TCP) }
   - { iface: WG, proto: UDP, src: HQ_NETS, dst: BR_DCS, port: PORTS_AD_UDP, descr: HQ to Branch DC - auth and replication (UDP) }
   - { iface: WG, proto: ICMP, src: HQ_NETS, dst: BR_DCS, descr: HQ ping Branch DC }
+  - { iface: WG, proto: UDP, src: HQ_DCS, dst: self, port: "67", descr: DHCP replies from the HQ DC to the relay }
+  - { iface: WG, proto: UDP, src: HQ_NETS, dst: BR_DCS, port: "67", descr: DHCP requests relayed by hq-fw01 to the Branch DC }
+  - { iface: WG, proto: TCP, src: HQ_DCS, dst: BR_DCS, port: PORTS_DHCP_FAILOVER, descr: DHCP failover HQ DC to Branch DC }
   - { iface: WG, proto: TCP, src: HQ_MGMT_NET, dst: "SERVERS:net", port: PORTS_MGMT, descr: HQ Mgmt to Branch servers }
   - { iface: WG, proto: TCP, src: VPN_RA_POOL, dst: "SERVERS:net", port: PORTS_MGMT, descr: VPN admins to Branch servers }
   - { iface: WG, proto: ICMP, src: HQ_MGMT_NET, dst: BR_NETS, descr: HQ Mgmt ping Branch }
@@ -43,3 +48,6 @@ opnsense_wg_peers:
   hq-fw01: { key: hq-fw01-s2s, psk: hq-br, allowed: [172.31.255.1/32, 172.16.0.0/16, 172.31.0.0/24], endpoint: 10.10.10.11, port: 51820, keepalive: 25 }
 
 opnsense_wg_clients: {}
+
+opnsense_dhcp_relays:
+  - { iface: USERS, servers: [172.16.20.11, 172.17.20.11] }

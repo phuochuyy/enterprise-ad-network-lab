@@ -99,3 +99,19 @@
   retries: 12
   delay: 5
   when: opnsense_wg_instances | length > 0
+
+- name: Read running DHCP relays
+  ansible.builtin.command: pgrep -lf /usr/local/sbin/dhcrelay
+  register: opnsense_dhcrelay
+  changed_when: false
+  failed_when: false
+  when: opnsense_dhcp_relays | length > 0
+
+- name: A DHCP relay runs towards every configured server
+  ansible.builtin.assert:
+    that: "opnsense_dhcrelay.stdout is search(item.servers | join(' '))"
+    fail_msg: "no dhcrelay for {{ item.iface }} -> {{ item.servers | join(', ') }}"
+    quiet: true
+  loop: "{{ opnsense_dhcp_relays }}"
+  loop_control:
+    label: "{{ item.iface }}"

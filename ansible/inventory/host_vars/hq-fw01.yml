@@ -28,6 +28,8 @@ opnsense_rules:
   - { iface: SERVERS, proto: TCP, src: "SERVERS:net", dst: BR_DCS, port: PORTS_AD_TCP, descr: AD replication to Branch DC (TCP) }
   - { iface: SERVERS, proto: UDP, src: "SERVERS:net", dst: BR_DCS, port: PORTS_AD_UDP, descr: AD replication to Branch DC (UDP) }
   - { iface: SERVERS, proto: ICMP, src: "SERVERS:net", dst: any, descr: Servers ping }
+  - { iface: SERVERS, proto: UDP, src: DCS, dst: self, port: "67", descr: DHCP replies from the DCs to the relay }
+  - { iface: SERVERS, proto: TCP, src: HQ_DCS, dst: BR_DCS, port: PORTS_DHCP_FAILOVER, descr: DHCP failover HQ DC to Branch DC }
 
   - { iface: USERS, proto: TCP, src: "USERS:net", dst: DCS, port: PORTS_AD_TCP, descr: Users to domain controllers (TCP) }
   - { iface: USERS, proto: UDP, src: "USERS:net", dst: DCS, port: PORTS_AD_UDP, descr: Users to domain controllers (UDP) }
@@ -42,6 +44,9 @@ opnsense_rules:
   - { iface: WG, proto: TCP, src: BR_NETS, dst: HQ_DCS, port: PORTS_AD_TCP, descr: Branch to HQ DC - auth and replication (TCP) }
   - { iface: WG, proto: UDP, src: BR_NETS, dst: HQ_DCS, port: PORTS_AD_UDP, descr: Branch to HQ DC - auth and replication (UDP) }
   - { iface: WG, proto: ICMP, src: BR_NETS, dst: HQ_DCS, descr: Branch ping HQ DC }
+  - { iface: WG, proto: UDP, src: BR_DCS, dst: self, port: "67", descr: DHCP replies from the Branch DC to the relay }
+  - { iface: WG, proto: UDP, src: BR_NETS, dst: HQ_DCS, port: "67", descr: DHCP requests relayed by br-fw01 to the HQ DC }
+  - { iface: WG, proto: TCP, src: BR_DCS, dst: HQ_DCS, port: PORTS_DHCP_FAILOVER, descr: DHCP failover Branch DC to HQ DC }
   - { iface: WG, proto: TCP, src: BR_USERS_NET, dst: FILESERVERS, port: "445", descr: Branch users to HQ file server SMB }
   - { iface: WG, proto: TCP, src: VPN_RA_POOL, dst: HQ_MGMT_NET, port: PORTS_MGMT, descr: VPN admins to HQ Mgmt }
   - { iface: WG, proto: TCP, src: VPN_RA_POOL, dst: HQ_SERVERS_NET, port: PORTS_MGMT, descr: VPN admins to HQ servers }
@@ -63,3 +68,6 @@ opnsense_wg_peers:
 opnsense_wg_clients:
   admin01: { address: 172.31.0.10/32, server: ra }
   rw-test: { address: 172.31.0.250/32, server: ra }
+
+opnsense_dhcp_relays:
+  - { iface: USERS, servers: [172.16.20.11, 172.17.20.11] }
