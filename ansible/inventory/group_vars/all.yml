@@ -11,3 +11,30 @@ pve_auth_header: "PVEAPIToken={{ pve_token['full-tokenid'] }}={{ pve_token.value
 admin_host: 10.10.10.1
 upstream_dns: [1.1.1.1, 9.9.9.9]
 ad_domain: corp.huylab.internal
+ad_netbios: CORP
+
+# --- Identities and file shares (issue #9) - AGDLP -----------------------------------------
+# A: user accounts -> G: global role groups (who people are, OU=Roles)
+#   -> DL: domain local resource groups (what they get, OU=Resources) -> P: NTFS permissions.
+# Permissions are ONLY ever granted to DL groups; people change role by changing G membership.
+ad_role_groups:
+  - { name: G-Finance, description: Finance department }
+  - { name: G-Sales, description: Sales department }
+  - { name: G-Management, description: Managers (read access to department shares) }
+  - { name: G-IT-Admins, description: IT administrators }
+
+# Test users for the access tests (password: secrets.json ad_test_user_password).
+ad_test_users:
+  - { name: u.finance01, given: Finance, surname: User01, site: HQ, groups: [G-Finance] }
+  - { name: u.sales01, given: Sales, surname: User01, site: Branch, groups: [G-Sales] }
+  - { name: u.manager01, given: Manager, surname: User01, site: HQ, groups: [G-Management] }
+  - { name: u.it01, given: IT, surname: Admin01, site: HQ, groups: [G-IT-Admins] }
+
+# Shares on hq-fs01, published under the DFS namespace \\<domain>\Shares\<name>.
+# rw/ro list role groups; each share gets DL-FS-<name>-RW / -RO groups holding them.
+fs_namespace: Shares
+fs_shares:
+  - { name: Finance, description: Finance department, rw: [G-Finance], ro: [G-Management] }
+  - { name: Sales, description: Sales department, rw: [G-Sales], ro: [G-Management] }
+  - { name: IT, description: IT department, rw: [G-IT-Admins], ro: [] }
+  - { name: Public, description: Company-wide read-only documents, rw: [G-IT-Admins], ro: [Domain Users] }

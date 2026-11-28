@@ -23,3 +23,12 @@ all:
               ansible_host: 172.17.20.11
               pve_vmid: 202
               ad_site: BRANCH
+        member_servers:
+          children:
+            file_servers:
+              hosts:
+                hq-fs01:
+                  ansible_host: 172.16.20.21
+                  pve_vmid: 211
+                  ad_site: HQ
+                  ad_ou: "OU=Servers,OU=HQ,OU=CORP"

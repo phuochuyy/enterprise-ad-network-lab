@@ -1,0 +1,5 @@
+# Domain members: same double-hop reasoning as the DCs (group_vars/domain_controllers.yml) for
+# tasks that reach AD or other servers; after the join "CORP\Administrator" is the domain admin.
+ansible_become_method: runas
+ansible_become_user: "{{ ad_netbios }}\\Administrator" # the DOMAIN admin - plain "Administrator" is the local one
+ansible_become_password: "{{ lab_secrets.admin_password }}"

@@ -1,0 +1,43 @@
+# AGDLP identities on the forest root DC: role groups (G), resource groups (DL) derived from
+# fs_shares, test users, and the memberships between them (A -> G -> DL).
+- name: Role groups (global)
+  microsoft.ad.group:
+    name: "{{ item.name }}"
+    scope: global
+    category: security
+    path: "OU=Roles,OU=Groups,OU=CORP,{{ ad_domain_dn }}"
+    description: "{{ item.description }}"
+  loop: "{{ ad_role_groups }}"
+  loop_control:
+    label: "{{ item.name }}"
+
+- name: Resource groups (domain local) - RW and RO per share
+  microsoft.ad.group:
+    name: "DL-FS-{{ item.0.name }}-{{ item.1 | upper }}"
+    scope: domainlocal
+    category: security
+    path: "OU=Resources,OU=Groups,OU=CORP,{{ ad_domain_dn }}"
+    description: "{{ 'Modify' if item.1 == 'rw' else 'Read' }} on \\\\{{ ad_domain }}\\{{ fs_namespace }}\\{{ item.0.name }}"
+    members:
+      set: "{{ item.0[item.1] }}"
+  loop: "{{ fs_shares | product(['rw', 'ro']) | list }}"
+  loop_control:
+    label: "DL-FS-{{ item.0.name }}-{{ item.1 | upper }} <- {{ item.0[item.1] | join(', ') | default('-', true) }}"
+
+- name: Test users
+  microsoft.ad.user:
+    name: "{{ item.name }}"
+    sam_account_name: "{{ item.name }}"
+    upn: "{{ item.name }}@{{ ad_domain }}"
+    firstname: "{{ item.given }}"
+    surname: "{{ item.surname }}"
+    path: "OU=Users,OU={{ item.site }},OU=CORP,{{ ad_domain_dn }}"
+    password: "{{ lab_secrets.ad_test_user_password }}"
+    update_password: on_create
+    password_never_expires: true # lab test account
+    enabled: true
+    groups:
+      set: "{{ item.groups + ['Domain Users'] }}"
+  loop: "{{ ad_test_users }}"
+  loop_control:
+    label: "{{ item.name }} ({{ item.groups | join(', ') }})"
