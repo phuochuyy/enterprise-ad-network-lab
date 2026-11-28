@@ -5,6 +5,8 @@
 # Semantics:
 #   allow - a TCP connect succeeds / a UDP reply comes back / ping answers
 #   deny  - nothing comes back before the timeout (pf drops; it never rejects)
+#   via   - (proto path) a TCP traceroute to the port passes through that hop: proves the route
+# `stage: pre-vpn` cases run before the probe with `vpn:` brings its tunnel up.
 # Every TCP/UDP port a case targets is listened on by the target probe, so a "deny" can only
 # come from the firewall, not from a closed port.
 #
@@ -22,6 +24,10 @@ probes:
   hq-dmz: { name: hq-prb04, vm_id: 954, bridge: vmbr10, vlan: 40, ip: 172.16.40.50, gateway: 172.16.40.1 }
   br-srv: { name: br-prb01, vm_id: 955, bridge: vmbr20, vlan: 120, ip: 172.17.20.11, gateway: 172.17.20.1 }
   br-usr: { name: br-prb02, vm_id: 956, bridge: vmbr20, vlan: 130, ip: 172.17.30.150, gateway: 172.17.30.1 }
+  # Outside the sites, on the simulated WAN: an admin laptop on the remote-access VPN (#6), and
+  # before the tunnel is up, a stranger on the WAN. Internet DNS for apt (wireguard-tools).
+  rw: { name: hq-prb05, vm_id: 957, bridge: vmbr1, ip: 10.10.10.70, gateway: 10.10.10.1, dns: 1.1.1.1,
+        vpn: { config: ansible/build/wireguard/rw-test.conf } }
 
 listen:
   hq-mgmt: { tcp: [22, 443] }
@@ -30,6 +36,7 @@ listen:
   hq-dmz: { tcp: [22, 80, 445] }
   br-srv: { tcp: [22, 53, 88, 389, 445, 3389], udp: [53] }
   br-usr: { tcp: [22, 3389] }
+  rw: {}
 
 # Targets: a probe name, "fw" (the probe's own gateway on the firewall) or an IP address.
 cases:
@@ -74,5 +81,29 @@ cases:
   - { from: br-usr, to: 1.1.1.1, proto: tcp, port: 443, expect: allow, why: Branch users browse the web }
   - { from: br-srv, to: br-usr, proto: tcp, port: 22, expect: deny, why: Branch servers do not initiate to clients }
   - { from: br-srv, to: fw, proto: udp, port: 53, expect: allow, why: Branch servers resolve through the firewall }
-  # Cross-site flows (Branch users -> HQ DC/file server, AD replication) need the WireGuard
-  # tunnel; they are added with issue #6.
+  # --- Cross-site over the WireGuard site-to-site tunnel (#6) ----------------------------------
+  - { from: br-usr, to: hq-srv, proto: path, port: 445, expect: via 172.31.255.1, why: Branch to HQ goes through the tunnel }
+  - { from: br-usr, to: hq-srv, proto: tcp, port: 445, expect: allow, why: Branch users to HQ DC - SMB }
+  - { from: br-usr, to: hq-srv, proto: tcp, port: 389, expect: allow, why: Branch users to HQ DC - LDAP }
+  - { from: br-usr, to: hq-srv, proto: udp, port: 53, expect: allow, why: Branch users to HQ DC - DNS }
+  - { from: br-usr, to: hq-srv, proto: tcp, port: 22, expect: deny, why: Branch users cannot SSH to HQ servers }
+  - { from: br-usr, to: hq-mgmt, proto: tcp, port: 22, expect: deny, why: Branch users cannot reach HQ Mgmt }
+  - { from: br-usr, to: hq-usr, proto: tcp, port: 3389, expect: deny, why: No client-to-client across sites }
+  - { from: hq-usr, to: br-srv, proto: tcp, port: 445, expect: allow, why: HQ users can authenticate at the Branch DC }
+  - { from: hq-usr, to: br-usr, proto: tcp, port: 22, expect: deny, why: No client-to-client across sites }
+  - { from: hq-srv, to: br-srv, proto: tcp, port: 389, expect: allow, why: AD replication HQ -> Branch }
+  - { from: br-srv, to: hq-srv, proto: tcp, port: 88, expect: allow, why: AD replication Branch -> HQ }
+  - { from: hq-mgmt, to: br-srv, proto: tcp, port: 22, expect: allow, why: HQ admins manage Branch servers }
+  - { from: br-srv, to: hq-mgmt, proto: tcp, port: 22, expect: deny, why: Branch cannot reach HQ Mgmt }
+  - { from: hq-dmz, to: br-srv, proto: tcp, port: 445, expect: deny, why: DMZ cannot reach the Branch }
+  # --- From the WAN, before the VPN is up: nothing but the VPN port is exposed -----------------
+  - { from: rw, to: 10.10.10.11, proto: tcp, port: 443, expect: deny, stage: pre-vpn, why: Firewall GUI not exposed to the WAN }
+  - { from: rw, to: 10.10.10.11, proto: tcp, port: 22, expect: deny, stage: pre-vpn, why: Firewall SSH not exposed to the WAN }
+  - { from: rw, to: 10.10.10.12, proto: tcp, port: 443, expect: deny, stage: pre-vpn, why: Branch GUI not exposed to the WAN }
+  # --- Remote-access VPN (admin laptop) ----------------------------------------------------------
+  - { from: rw, to: hq-mgmt, proto: path, port: 22, expect: via 172.31.0.1, why: Admin traffic enters through the VPN }
+  - { from: rw, to: hq-mgmt, proto: tcp, port: 22, expect: allow, why: VPN admins reach HQ Mgmt }
+  - { from: rw, to: hq-srv, proto: tcp, port: 5986, expect: allow, why: VPN admins reach WinRM on servers }
+  - { from: rw, to: br-srv, proto: tcp, port: 22, expect: allow, why: VPN admins reach Branch servers through HQ }
+  - { from: rw, to: hq-usr, proto: tcp, port: 3389, expect: deny, why: VPN admins do not land on client VLANs }
+  - { from: rw, to: hq-dmz, proto: tcp, port: 80, expect: deny, why: VPN is for management, not the DMZ }

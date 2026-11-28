@@ -18,6 +18,8 @@ opnsense_rules:
   - { iface: WAN, proto: TCP, src: ADMIN_HOST, dst: "MGMT:net", port: PORTS_MGMT, descr: Admin host to Mgmt VLAN }
   - { iface: WAN, proto: TCP, src: ADMIN_HOST, dst: "SERVERS:net", port: PORTS_MGMT, descr: Admin host to servers (Ansible) }
   - { iface: WAN, proto: ICMP, src: ADMIN_HOST, dst: HQ_NETS, descr: Admin host ping for diagnostics }
+  - { iface: WAN, proto: UDP, src: BR_FW_WAN, dst: "WAN:ip", port: "51820", descr: WireGuard site-to-site from Branch }
+  - { iface: WAN, proto: UDP, src: any, dst: "WAN:ip", port: "51821", descr: WireGuard remote access for admins }
 
   - { iface: MGMT, proto: any, src: "MGMT:net", dst: any, descr: Mgmt is the trusted admin VLAN }
 
@@ -35,3 +37,29 @@ opnsense_rules:
 
   - { iface: DMZ, proto: TCP/UDP, src: "DMZ:net", dst: self, port: "53", descr: DMZ to firewall DNS }
   - { iface: DMZ, proto: TCP, src: "DMZ:net", dst: RFC1918, dst_not: true, port: PORTS_WEB, descr: DMZ to Internet web only }
+
+  # Traffic arriving through WireGuard (both instances share the "wireguard" interface group).
+  - { iface: WG, proto: TCP, src: BR_NETS, dst: HQ_DCS, port: PORTS_AD_TCP, descr: Branch to HQ DC - auth and replication (TCP) }
+  - { iface: WG, proto: UDP, src: BR_NETS, dst: HQ_DCS, port: PORTS_AD_UDP, descr: Branch to HQ DC - auth and replication (UDP) }
+  - { iface: WG, proto: ICMP, src: BR_NETS, dst: HQ_DCS, descr: Branch ping HQ DC }
+  - { iface: WG, proto: TCP, src: BR_USERS_NET, dst: FILESERVERS, port: "445", descr: Branch users to HQ file server SMB }
+  - { iface: WG, proto: TCP, src: VPN_RA_POOL, dst: HQ_MGMT_NET, port: PORTS_MGMT, descr: VPN admins to HQ Mgmt }
+  - { iface: WG, proto: TCP, src: VPN_RA_POOL, dst: HQ_SERVERS_NET, port: PORTS_MGMT, descr: VPN admins to HQ servers }
+  - { iface: WG, proto: TCP, src: VPN_RA_POOL, dst: BR_SERVERS_NET, port: PORTS_MGMT, descr: VPN admins to Branch servers (via s2s) }
+  - { iface: WG, proto: TCP, src: VPN_RA_POOL, dst: self, port: PORTS_FW_ADMIN, descr: VPN admins to firewall SSH and GUI }
+  - { iface: WG, proto: ICMP, src: VPN_RA_POOL, dst: any, descr: VPN admins ping }
+
+# --- WireGuard: site-to-site to Branch (wg0) and remote access for admins (wg1) --------------
+opnsense_wg_instances:
+  - { name: s2s, instance: 0, key: hq-fw01-s2s, port: 51820, tunnel: 172.31.255.1/30, peers: [br-fw01] }
+  - { name: ra, instance: 1, key: hq-fw01-ra, port: 51821, tunnel: 172.31.0.1/24, peers: [admin01, rw-test] }
+
+opnsense_wg_peers:
+  br-fw01: { key: br-fw01-s2s, psk: hq-br, allowed: [172.31.255.2/32, 172.17.0.0/16], endpoint: 10.10.10.12, port: 51820, keepalive: 25 }
+  admin01: { key: admin01, allowed: [172.31.0.10/32] }
+  rw-test: { key: rw-test, allowed: [172.31.0.250/32] } # used only by tests/firewall (probe "rw")
+
+# Road-warrior client configs rendered to ansible/build/wireguard/ (never committed).
+opnsense_wg_clients:
+  admin01: { address: 172.31.0.10/32, server: ra }
+  rw-test: { address: 172.31.0.250/32, server: ra }

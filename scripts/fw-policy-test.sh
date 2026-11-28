@@ -21,6 +21,9 @@ cleanup() {
 }
 trap cleanup EXIT
 
+echo "--- rendering WireGuard client configs (probe rw)"
+"${ROOT}/scripts/ansible.sh" playbooks/firewalls-render.yml >/dev/null
+
 echo "--- creating probes"
 tf init -input=false -no-color >/dev/null
 tf apply -auto-approve -input=false -no-color | grep -E '^(Apply complete|Plan:)' || true

@@ -7,7 +7,7 @@
   Interface keys: wan = vtnet1, lan = vtnet0 (the site trunk, no address - VLAN parent only),
   opt1..optN = one per VLAN in opnsense_vlans order. Rules reference VLANs by name and are mapped here.
 #}
-{% set ifmap = {'WAN': 'wan'} %}
+{% set ifmap = {'WAN': 'wan', 'WG': 'wireguard'} %}
 {% for v in opnsense_vlans %}{% set _ = ifmap.update({v.name: 'opt' ~ loop.index}) %}{% endfor %}
 {% macro addr(value) -%}
 {%- if value == 'self' -%}(self)
@@ -165,5 +165,44 @@
         <onetoone/>
       </Filter>
     </Firewall>
+{% set wgkeys = lab_secrets.wireguard['keys'] %}
+    <wireguard>
+      <general version="0.0.1">
+        <enabled>{{ 1 if opnsense_wg_instances else 0 }}</enabled>
+      </general>
+      <client version="1.0.0">
+        <clients>
+{% for name, peer in opnsense_wg_peers.items() %}
+          <client uuid="{{ (inventory_hostname ~ '/wg-peer/' ~ name) | to_uuid }}">
+            <enabled>1</enabled>
+            <name>{{ name }}</name>
+            <pubkey>{{ wgkeys[peer.key].public }}</pubkey>
+            <psk>{{ lab_secrets.wireguard.psk[peer.psk] if peer.psk is defined else '' }}</psk>
+            <tunneladdress>{{ peer.allowed | join(',') }}</tunneladdress>
+            <serveraddress>{{ peer.endpoint | default('') }}</serveraddress>
+            <serverport>{{ peer.port | default('') }}</serverport>
+            <keepalive>{{ peer.keepalive | default('') }}</keepalive>
+          </client>
+{% endfor %}
+        </clients>
+      </client>
+      <server version="1.0.1">
+        <servers>
+{% for wg in opnsense_wg_instances %}
+          <server uuid="{{ (inventory_hostname ~ '/wg-instance/' ~ wg.name) | to_uuid }}">
+            <enabled>1</enabled>
+            <name>{{ wg.name }}</name>
+            <instance>{{ wg.instance }}</instance>
+            <pubkey>{{ wgkeys[wg.key].public }}</pubkey>
+            <privkey>{{ wgkeys[wg.key].private }}</privkey>
+            <port>{{ wg.port }}</port>
+            <tunneladdress>{{ wg.tunnel }}</tunneladdress>
+            <disableroutes>0</disableroutes>
+            <peers>{% for p in wg.peers %}{{ (inventory_hostname ~ '/wg-peer/' ~ p) | to_uuid }}{{ ',' if not loop.last }}{% endfor %}</peers>
+          </server>
+{% endfor %}
+        </servers>
+      </server>
+    </wireguard>
   </OPNsense>
 </opnsense>

@@ -11,6 +11,7 @@ opnsense_rules:
   - { iface: WAN, proto: TCP, src: ADMIN_HOST, dst: self, port: PORTS_FW_ADMIN, descr: Admin host to firewall SSH and GUI }
   - { iface: WAN, proto: TCP, src: ADMIN_HOST, dst: "SERVERS:net", port: PORTS_MGMT, descr: Admin host to servers (Ansible) }
   - { iface: WAN, proto: ICMP, src: ADMIN_HOST, dst: BR_NETS, descr: Admin host ping for diagnostics }
+  - { iface: WAN, proto: UDP, src: HQ_FW_WAN, dst: "WAN:ip", port: "51820", descr: WireGuard site-to-site from HQ }
 
   - { iface: SERVERS, proto: TCP/UDP, src: "SERVERS:net", dst: self, port: PORTS_INFRA_UDP, descr: Servers to firewall DNS and NTP }
   - { iface: SERVERS, proto: TCP, src: "SERVERS:net", dst: RFC1918, dst_not: true, port: PORTS_WEB, descr: Servers to Internet web (updates) }
@@ -23,3 +24,22 @@ opnsense_rules:
   - { iface: USERS, proto: TCP, src: "USERS:net", dst: FILESERVERS, port: "445", descr: Users to HQ file server SMB }
   - { iface: USERS, proto: ICMP, src: "USERS:net", dst: DCS, descr: Users ping DCs }
   - { iface: USERS, proto: TCP, src: "USERS:net", dst: RFC1918, dst_not: true, port: PORTS_WEB, descr: Users to Internet web }
+
+  # Traffic arriving through the site-to-site tunnel from HQ (and HQ's VPN admins).
+  - { iface: WG, proto: TCP, src: HQ_NETS, dst: BR_DCS, port: PORTS_AD_TCP, descr: HQ to Branch DC - auth and replication (TCP) }
+  - { iface: WG, proto: UDP, src: HQ_NETS, dst: BR_DCS, port: PORTS_AD_UDP, descr: HQ to Branch DC - auth and replication (UDP) }
+  - { iface: WG, proto: ICMP, src: HQ_NETS, dst: BR_DCS, descr: HQ ping Branch DC }
+  - { iface: WG, proto: TCP, src: HQ_MGMT_NET, dst: "SERVERS:net", port: PORTS_MGMT, descr: HQ Mgmt to Branch servers }
+  - { iface: WG, proto: TCP, src: VPN_RA_POOL, dst: "SERVERS:net", port: PORTS_MGMT, descr: VPN admins to Branch servers }
+  - { iface: WG, proto: ICMP, src: HQ_MGMT_NET, dst: BR_NETS, descr: HQ Mgmt ping Branch }
+  - { iface: WG, proto: ICMP, src: VPN_RA_POOL, dst: BR_NETS, descr: VPN admins ping Branch }
+
+# --- WireGuard: site-to-site to HQ (wg0) -------------------------------------------------------
+opnsense_wg_instances:
+  - { name: s2s, instance: 0, key: br-fw01-s2s, port: 51820, tunnel: 172.31.255.2/30, peers: [hq-fw01] }
+
+opnsense_wg_peers:
+  # Remote-access clients terminate at HQ; Branch routes their pool back through the tunnel.
+  hq-fw01: { key: hq-fw01-s2s, psk: hq-br, allowed: [172.31.255.1/32, 172.16.0.0/16, 172.31.0.0/24], endpoint: 10.10.10.11, port: 51820, keepalive: 25 }
+
+opnsense_wg_clients: {}

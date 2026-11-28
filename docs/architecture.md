@@ -106,6 +106,17 @@ deny = timeout, every target port has a listener), writes
 On each firewall, `vtnet0` is the site trunk (VLAN parent, no address) and `vtnet1` is the WAN.
 VLAN interfaces are `opt1..optN` in `opnsense_vlans` order.
 
+## VPN (ADR-0005)
+
+| Tunnel | Where | Port | Addresses | Carries |
+| --- | --- | --- | --- | --- |
+| Site-to-site `wg0` | hq-fw01 <-> br-fw01 | UDP 51820 (peer WAN only) | 172.31.255.1/30 - .2 | HQ <-> Branch, plus the VPN pool towards Branch; PSK on top of the keys |
+| Remote access `wg1` | hq-fw01 | UDP 51821 (whole WAN) | 172.31.0.1/24, admin01 .10 | Admins to Mgmt/Servers at both sites (split tunnel) |
+
+Client configs are rendered to `ansible/build/wireguard/<peer>.conf` by
+`scripts/ansible.sh playbooks/firewalls-render.yml` (they hold a private key: never committed).
+Keys live in `~/.config/lab/secrets.json` (`scripts/lab-secrets.sh`).
+
 ## Security baseline
 
 - Inter-VLAN traffic is **deny by default**; each allowed flow is an explicit rule

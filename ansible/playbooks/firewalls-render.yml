@@ -1,4 +1,5 @@
-# Render each firewall's config.xml into ansible/build/ without touching the firewalls.
+# Render each firewall's config.xml (and WireGuard client configs) into ansible/build/ without
+# touching the firewalls.
 # Run: scripts/ansible.sh playbooks/firewalls-render.yml
 - name: Render OPNsense configs
   hosts: firewalls
@@ -8,7 +9,7 @@
   tasks:
     - name: Create the render directory
       ansible.builtin.file:
-        path: "{{ opnsense_render_dir }}"
+        path: "{{ opnsense_render_dir }}/wireguard"
         state: directory
         mode: "0700"
       delegate_to: localhost

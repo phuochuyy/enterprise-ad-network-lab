@@ -5,6 +5,7 @@
 set -euo pipefail
 
 ROOT="$(git -C "$(dirname "$0")" rev-parse --show-toplevel)"
+"${ROOT}/scripts/lab-secrets.sh" # create missing keys (idempotent) before anything renders them
 cd "${ROOT}/ansible"
 export ANSIBLE_CONFIG="${ROOT}/ansible/ansible.cfg"
 exec ansible-playbook "$@"
