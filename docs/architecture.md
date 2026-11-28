@@ -95,7 +95,13 @@ data (`ansible/inventory/host_vars/hq-fw01.yml`, `br-fw01.yml`):
 scripts/ansible.sh playbooks/firewalls-render.yml   # review: render into ansible/build/, touch nothing
 scripts/ansible.sh playbooks/firewalls.yml          # converge (reboots a firewall only if its config changed)
 scripts/ansible.sh playbooks/firewalls-export.yml   # sanitized running config -> docs/network/opnsense/
+scripts/fw-policy-test.sh                           # prove the policy with real traffic (~8 min)
 ```
+
+`scripts/fw-policy-test.sh` creates one Ubuntu probe per VLAN (`terraform/envs/fw-test`), runs every
+case of `tests/firewall/policy.yml` through the Proxmox guest agent (allow = connection or reply,
+deny = timeout, every target port has a listener), writes
+[`docs/network/policy-test-report.md`](network/policy-test-report.md) and destroys the probes.
 
 On each firewall, `vtnet0` is the site trunk (VLAN parent, no address) and `vtnet1` is the WAN.
 VLAN interfaces are `opt1..optN` in `opnsense_vlans` order.

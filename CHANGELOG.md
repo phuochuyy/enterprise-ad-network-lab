@@ -27,6 +27,7 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), versioning: [S
 - CI: `packer-validate` for OPNsense, `ansible-lint` (production profile)
 - Ubuntu 24.04 template `tpl-ubuntu-2404` with qemu-guest-agent (Packer `proxmox-clone` of the Terraform-imported cloud image `base-ubuntu-2404-cloudimg`)
 - `scripts/smoke-test.sh linux`: cloud-init hostname/IP/SSH key, cloud-init done, guest agent answering the Proxmox API
+- Firewall policy test (`scripts/fw-policy-test.sh`, `tests/firewall/policy.yml`): 34 allow/deny cases between VLANs proven with real traffic from probe VMs, report in `docs/network/policy-test-report.md`
 
 ### Fixed
 
