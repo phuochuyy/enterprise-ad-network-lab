@@ -5,6 +5,22 @@
 $ErrorActionPreference = 'Stop'
 Start-Transcript -Path 'C:\Program Files\Cloudbase Solutions\Cloudbase-Init\log\winrm-https.log' -Append
 
+# Client SKUs (Windows 11) start WinRM delayed, so it is usually still stopped here. Touching
+# WSMan:\ then asks "Start WinRM Service?", which fails in this non-interactive session.
+Set-Service -Name WinRM -StartupType Automatic
+Start-Service -Name WinRM
+(Get-Service -Name WinRM).WaitForStatus('Running', [TimeSpan]::FromMinutes(2))
+
+# Client SKUs refuse WSMan service changes while any connection is Public ("WinRM firewall
+# exception will not work..."), and the unattend NetworkLocation is ignored since Windows 10.
+# Private suits the lab LANs; domain join later makes the profile DomainAuthenticated. Retry
+# while the network is still "Identifying...".
+for ($i = 0; $i -lt 24; $i++) {
+    $public = Get-NetConnectionProfile | Where-Object NetworkCategory -eq 'Public'
+    if (-not $public) { break }
+    try { $public | Set-NetConnectionProfile -NetworkCategory Private -ErrorAction Stop } catch { Start-Sleep -Seconds 5 }
+}
+
 $cert = New-SelfSignedCertificate -DnsName $env:COMPUTERNAME -CertStoreLocation Cert:\LocalMachine\My `
     -KeyExportPolicy NonExportable -NotAfter (Get-Date).AddYears(5)
 
