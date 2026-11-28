@@ -15,3 +15,9 @@ variable "node_name" {
   type        = string
   default     = "pve"
 }
+
+variable "opnsense_template_vm_id" {
+  description = "VMID of the Packer OPNsense template (packer/opnsense)."
+  type        = number
+  default     = 9005
+}

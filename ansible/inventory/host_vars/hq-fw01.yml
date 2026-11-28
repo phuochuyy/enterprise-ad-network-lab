@@ -1,0 +1,37 @@
+# HQ firewall - docs/architecture.md (Addressing, Security baseline).
+# Rule fields: iface (WAN or a VLAN name), proto (TCP | UDP | TCP/UDP | ICMP | any),
+# src/dst (alias | <VLAN>:net | <VLAN>:ip | self | any), dst_not, port, action (pass), log.
+# Anything not passed here is dropped by the default deny rule (and logged).
+opnsense_wan_ip: 10.10.10.11
+
+opnsense_vlans:
+  - { tag: 10, name: MGMT, ip: 172.16.10.1, prefix: 24 }
+  - { tag: 20, name: SERVERS, ip: 172.16.20.1, prefix: 24 }
+  - { tag: 30, name: USERS, ip: 172.16.30.1, prefix: 24 }
+  - { tag: 40, name: DMZ, ip: 172.16.40.1, prefix: 24 }
+
+opnsense_aliases_site: []
+
+opnsense_rules:
+  # Admin access path: only the Proxmox host, only management ports, only Mgmt and Servers.
+  - { iface: WAN, proto: TCP, src: ADMIN_HOST, dst: self, port: PORTS_FW_ADMIN, descr: Admin host to firewall SSH and GUI }
+  - { iface: WAN, proto: TCP, src: ADMIN_HOST, dst: "MGMT:net", port: PORTS_MGMT, descr: Admin host to Mgmt VLAN }
+  - { iface: WAN, proto: TCP, src: ADMIN_HOST, dst: "SERVERS:net", port: PORTS_MGMT, descr: Admin host to servers (Ansible) }
+  - { iface: WAN, proto: ICMP, src: ADMIN_HOST, dst: HQ_NETS, descr: Admin host ping for diagnostics }
+
+  - { iface: MGMT, proto: any, src: "MGMT:net", dst: any, descr: Mgmt is the trusted admin VLAN }
+
+  - { iface: SERVERS, proto: TCP/UDP, src: "SERVERS:net", dst: self, port: PORTS_INFRA_UDP, descr: Servers to firewall DNS and NTP }
+  - { iface: SERVERS, proto: TCP, src: "SERVERS:net", dst: RFC1918, dst_not: true, port: PORTS_WEB, descr: Servers to Internet web (updates) }
+  - { iface: SERVERS, proto: TCP, src: "SERVERS:net", dst: BR_DCS, port: PORTS_AD_TCP, descr: AD replication to Branch DC (TCP) }
+  - { iface: SERVERS, proto: UDP, src: "SERVERS:net", dst: BR_DCS, port: PORTS_AD_UDP, descr: AD replication to Branch DC (UDP) }
+  - { iface: SERVERS, proto: ICMP, src: "SERVERS:net", dst: any, descr: Servers ping }
+
+  - { iface: USERS, proto: TCP, src: "USERS:net", dst: DCS, port: PORTS_AD_TCP, descr: Users to domain controllers (TCP) }
+  - { iface: USERS, proto: UDP, src: "USERS:net", dst: DCS, port: PORTS_AD_UDP, descr: Users to domain controllers (UDP) }
+  - { iface: USERS, proto: TCP, src: "USERS:net", dst: FILESERVERS, port: "445", descr: Users to file server SMB }
+  - { iface: USERS, proto: ICMP, src: "USERS:net", dst: DCS, descr: Users ping DCs }
+  - { iface: USERS, proto: TCP, src: "USERS:net", dst: RFC1918, dst_not: true, port: PORTS_WEB, descr: Users to Internet web }
+
+  - { iface: DMZ, proto: TCP/UDP, src: "DMZ:net", dst: self, port: "53", descr: DMZ to firewall DNS }
+  - { iface: DMZ, proto: TCP, src: "DMZ:net", dst: RFC1918, dst_not: true, port: PORTS_WEB, descr: DMZ to Internet web only }

@@ -1,0 +1,9 @@
+# Root password: crypt(3) SHA-512 of secrets.json opnsense_root_password. The salt is derived from
+# the hostname so the hash - and therefore config.xml - is stable between runs (idempotent).
+# The password goes to openssl on stdin, never on a command line.
+opnsense_root_password_hash: >-
+  {{ lookup('ansible.builtin.pipe',
+     'jq -er .opnsense_root_password ~/.config/lab/secrets.json | openssl passwd -6 -stdin -salt '
+     ~ (inventory_hostname | hash('sha1'))[:16]) }}
+opnsense_root_authorized_key: "{{ lookup('ansible.builtin.file', lab_ssh_key ~ '.pub') }}"
+opnsense_aliases_site: []

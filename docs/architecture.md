@@ -82,6 +82,22 @@ Reserved for companion repos: `3xx` Hyper-V/Veeam (`hyperv-ha-dr-lab`), `4xx` mo
 | 9002 | `tpl-ws2022-desktop` |
 | 9003 | `tpl-win11-ent` |
 | 9004 | `tpl-ubuntu-2404` |
+| 9005 | `tpl-opnsense-26.7` (see ADR-0004) |
+
+## Firewall configuration
+
+Both firewalls are managed as code (ADR-0004). Terraform creates the VMs
+(`terraform/envs/lab/firewalls.tf`). Ansible renders and applies their full config from inventory
+data (`ansible/inventory/host_vars/hq-fw01.yml`, `br-fw01.yml`):
+
+```bash
+scripts/ansible.sh playbooks/firewalls-render.yml   # review: render into ansible/build/, touch nothing
+scripts/ansible.sh playbooks/firewalls.yml          # converge (reboots a firewall only if its config changed)
+scripts/ansible.sh playbooks/firewalls-export.yml   # sanitized running config -> docs/network/opnsense/
+```
+
+On each firewall, `vtnet0` is the site trunk (VLAN parent, no address) and `vtnet1` is the WAN.
+VLAN interfaces are `opt1..optN` in `opnsense_vlans` order.
 
 ## Security baseline
 

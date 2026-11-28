@@ -1,0 +1,45 @@
+# Fresh clone of tpl-opnsense: no WAN address, so SSH cannot reach it. Give vtnet1 its address at
+# runtime and disable pf (the template's rules reference a WAN address that does not exist yet).
+# Both are temporary: the full config pushed right after, and the reboot it triggers, replace them.
+- name: Wait for the guest agent
+  ansible.builtin.uri:
+    url: "{{ pve_api_url }}/nodes/{{ pve_node }}/qemu/{{ pve_vmid }}/agent/ping"
+    method: POST
+    headers: { Authorization: "{{ pve_auth_header }}" }
+    validate_certs: false # loopback to the host's self-signed API certificate
+  delegate_to: localhost
+  register: opnsense_agent
+  until: opnsense_agent.status == 200
+  retries: 30
+  delay: 10
+  no_log: true
+
+- name: Assign the WAN address through the guest agent
+  ansible.builtin.uri:
+    url: "{{ pve_api_url }}/nodes/{{ pve_node }}/qemu/{{ pve_vmid }}/agent/exec"
+    method: POST
+    headers: { Authorization: "{{ pve_auth_header }}" }
+    body_format: form-urlencoded
+    body:
+      command:
+        - /bin/sh
+        - -c
+        - "ifconfig vtnet1 inet {{ opnsense_wan_ip }}/{{ opnsense_wan_prefix }} up; pfctl -d || true"
+    validate_certs: false
+  delegate_to: localhost
+  changed_when: true
+  no_log: true
+
+- name: Forget host keys of earlier incarnations of this VM
+  ansible.builtin.command: ssh-keygen -R {{ ansible_host }} -f ~/.config/lab/known_hosts
+  delegate_to: localhost
+  register: opnsense_known_hosts
+  changed_when: "'updated' in opnsense_known_hosts.stdout"
+  failed_when: false
+
+- name: Wait for SSH on the WAN address
+  ansible.builtin.wait_for:
+    host: "{{ ansible_host }}"
+    port: 22
+    timeout: 120
+  delegate_to: localhost

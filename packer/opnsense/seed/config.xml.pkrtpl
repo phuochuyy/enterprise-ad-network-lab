@@ -1,0 +1,145 @@
+<?xml version="1.0"?>
+<!--
+  Template config for tpl-opnsense (Packer). Derived from the stock /usr/local/etc/config.xml of
+  OPNsense 26.7 with only what an unattended build and an out-of-band first push need:
+  - LAN = vtnet0 (site trunk), WAN = vtnet1 (simulated WAN vmbr1) - same order the stock
+    auto-assignment picks, so a NIC mismatch never stops the boot at a prompt;
+  - WAN static ${wan_ip == "" ? "address: NONE (final template - clones get theirs pushed through the guest agent)" : "build address ${wan_ip}/${wan_prefix}"};
+  - LAN keeps the stock 192.168.1.1/24 (untagged on the site trunk, harmless): the guest agent
+    then always reports an address, which Terraform waits for when it clones;
+  - SSH key-only for root (lab automation key), root shell /bin/sh for non-interactive use;
+  - WAN rules: only the Proxmox host (${admin_host}) may reach SSH and the web GUI.
+  Every site firewall later receives a full rendered config (network/opnsense), not this one.
+-->
+<opnsense>
+  <theme>opnsense</theme>
+  <system>
+    <optimization>normal</optimization>
+    <hostname>${hostname}</hostname>
+    <domain>internal</domain>
+    <dnsallowoverride>0</dnsallowoverride>
+    <dnsserver>${dns_server}</dnsserver>
+    <group>
+      <name>admins</name>
+      <description>System Administrators</description>
+      <scope>system</scope>
+      <gid>1999</gid>
+      <member>0</member>
+      <priv>page-all</priv>
+    </group>
+    <user>
+      <name>root</name>
+      <descr>System Administrator</descr>
+      <scope>system</scope>
+      <groupname>admins</groupname>
+      <password>${root_password_hash}</password>
+      <uid>0</uid>
+      <shell>/bin/sh</shell>
+      <authorizedkeys>${ssh_authorized_key_b64}</authorizedkeys>
+    </user>
+    <timezone>Asia/Ho_Chi_Minh</timezone>
+    <timeservers>0.opnsense.pool.ntp.org 1.opnsense.pool.ntp.org</timeservers>
+    <webgui>
+      <protocol>https</protocol>
+    </webgui>
+    <disablenatreflection>yes</disablenatreflection>
+    <usevirtualterminal>1</usevirtualterminal>
+    <disableconsolemenu/>
+    <ipv6allow>0</ipv6allow>
+    <bogons>
+      <interval>monthly</interval>
+    </bogons>
+    <pf_share_forward>1</pf_share_forward>
+    <lb_use_sticky>1</lb_use_sticky>
+    <ssh>
+      <group>admins</group>
+      <enabled>enabled</enabled>
+      <permitrootlogin>1</permitrootlogin>
+    </ssh>
+  </system>
+  <interfaces>
+    <wan>
+      <enable>1</enable>
+      <if>vtnet1</if>
+      <descr>WAN</descr>
+%{ if wan_ip != "" ~}
+      <ipaddr>${wan_ip}</ipaddr>
+      <subnet>${wan_prefix}</subnet>
+      <gateway>WAN_GW</gateway>
+%{ endif ~}
+    </wan>
+    <lan>
+      <enable>1</enable>
+      <if>vtnet0</if>
+      <descr>LAN</descr>
+      <ipaddr>192.168.1.1</ipaddr>
+      <subnet>24</subnet>
+    </lan>
+  </interfaces>
+%{ if wan_ip != "" ~}
+  <gateways>
+    <gateway_item>
+      <interface>wan</interface>
+      <gateway>${wan_gateway}</gateway>
+      <name>WAN_GW</name>
+      <weight>1</weight>
+      <ipprotocol>inet</ipprotocol>
+      <descr>Proxmox host NAT</descr>
+      <defaultgw>1</defaultgw>
+    </gateway_item>
+  </gateways>
+%{ endif ~}
+  <unbound>
+    <enable>1</enable>
+  </unbound>
+  <nat>
+    <outbound>
+      <mode>automatic</mode>
+    </outbound>
+  </nat>
+  <filter>
+  </filter>
+  <OPNsense>
+    <Firewall>
+      <Filter>
+        <rules>
+          <rule>
+            <enabled>1</enabled>
+            <statetype>keep</statetype>
+            <sequence>10</sequence>
+            <action>pass</action>
+            <quick>1</quick>
+            <interface>wan</interface>
+            <direction>in</direction>
+            <ipprotocol>inet</ipprotocol>
+            <protocol>TCP</protocol>
+            <source_net>${admin_host}/32</source_net>
+            <destination_net>wanip</destination_net>
+            <destination_port>22</destination_port>
+            <log>0</log>
+            <description>Admin host to firewall SSH</description>
+          </rule>
+          <rule>
+            <enabled>1</enabled>
+            <statetype>keep</statetype>
+            <sequence>20</sequence>
+            <action>pass</action>
+            <quick>1</quick>
+            <interface>wan</interface>
+            <direction>in</direction>
+            <ipprotocol>inet</ipprotocol>
+            <protocol>TCP</protocol>
+            <source_net>${admin_host}/32</source_net>
+            <destination_net>wanip</destination_net>
+            <destination_port>443</destination_port>
+            <log>0</log>
+            <description>Admin host to firewall web GUI</description>
+          </rule>
+        </rules>
+        <snatrules/>
+        <npt/>
+        <onetoone/>
+      </Filter>
+    </Firewall>
+  </OPNsense>
+</opnsense>

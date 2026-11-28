@@ -1,0 +1,86 @@
+# Converge one OPNsense firewall to the config rendered from inventory.
+# In band (SSH on the WAN address) whenever possible; a fresh clone has no WAN address yet, so it
+# is first given one out of band through the QEMU guest agent (bootstrap.yml).
+- name: Check whether the firewall answers SSH on its WAN address
+  ansible.builtin.wait_for:
+    host: "{{ ansible_host }}"
+    port: 22
+    timeout: 5
+  delegate_to: localhost
+  register: opnsense_ssh
+  ignore_errors: true
+
+- name: Bootstrap a fresh clone out of band
+  ansible.builtin.include_tasks: bootstrap.yml
+  when: opnsense_ssh is failed
+
+# OPNsense rewrites /conf/config.xml on every boot (model migrations add uuids and defaults), so
+# comparing against it would report a change - and reboot - on every run. Change detection uses
+# the last rendered intent instead, kept beside it in /conf/ansible/.
+- name: Create the desired-state directory
+  ansible.builtin.file:
+    path: /conf/ansible
+    state: directory
+    mode: "0700"
+
+- name: Render the desired config.xml
+  ansible.builtin.template:
+    src: config.xml.j2
+    dest: /conf/ansible/config.desired.xml
+    mode: "0600"
+    # Refuse anything PHP cannot parse: a broken config.xml would boot to factory defaults.
+    validate: "/usr/local/bin/php -r 'exit(simplexml_load_file($argv[1]) === false ? 1 : 0);' %s"
+  register: opnsense_config
+
+- name: Read interface addresses before applying
+  ansible.builtin.command: ifconfig -a inet
+  register: opnsense_ifconfig_before
+  changed_when: false
+
+# Apply when the file changed OR the box does not run it yet (e.g. an earlier run replaced the
+# file but failed before the reboot) - so every run converges, not only the first one.
+- name: Decide whether the config must be applied
+  ansible.builtin.set_fact:
+    opnsense_apply: >-
+      {{ opnsense_config.changed
+         or (opnsense_vlans | rejectattr('ip', 'in', opnsense_ifconfig_before.stdout) | list | length > 0)
+         or ('inet ' ~ opnsense_wan_ip ~ ' ' not in opnsense_ifconfig_before.stdout) }}
+
+- name: Install the desired config.xml
+  ansible.builtin.copy:
+    src: /conf/ansible/config.desired.xml
+    dest: /conf/config.xml
+    remote_src: true
+    mode: "0644"
+  when: opnsense_apply | bool
+
+- name: Apply by rebooting (interfaces, VLANs, gateway, rules and services in one step)
+  ansible.builtin.reboot:
+    reboot_command: /usr/local/etc/rc.reboot # OPNsense's own clean reboot path
+    reboot_timeout: 600
+    msg: config.xml applied by Ansible
+  when: opnsense_apply | bool
+
+- name: Read interface addresses
+  ansible.builtin.command: ifconfig -a inet
+  register: opnsense_ifconfig
+  changed_when: false
+
+- name: Every VLAN interface carries its gateway address
+  ansible.builtin.assert:
+    that: "'inet ' ~ item.ip ~ ' ' in opnsense_ifconfig.stdout"
+    fail_msg: "VLAN {{ item.tag }} ({{ item.name }}) has no address {{ item.ip }}"
+    quiet: true
+  loop: "{{ opnsense_vlans }}"
+  loop_control:
+    label: "{{ item.name }} {{ item.ip }}"
+
+- name: Read packet filter status
+  ansible.builtin.command: pfctl -s info
+  register: opnsense_pf
+  changed_when: false
+
+- name: Packet filter is enabled
+  ansible.builtin.assert:
+    that: "'Status: Enabled' in opnsense_pf.stdout"
+    quiet: true

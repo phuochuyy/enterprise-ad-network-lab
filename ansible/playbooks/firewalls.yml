@@ -1,0 +1,6 @@
+# Site firewalls (issue #5). Run: scripts/ansible.sh playbooks/firewalls.yml [--limit hq-fw01]
+- name: OPNsense site firewalls
+  hosts: firewalls
+  gather_facts: false
+  roles:
+    - opnsense
