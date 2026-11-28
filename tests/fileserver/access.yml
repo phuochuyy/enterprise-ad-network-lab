@@ -1,0 +1,31 @@
+# File share access test (issue #9): real domain users, real SMB through the DFS namespace,
+# from Linux clients in each site's Users VLAN (DHCP). Read by terraform/envs/fs-test (clients)
+# and tests/fileserver/run.py (cases). Expectations follow fs_shares / AGDLP in group_vars/all.yml.
+template_vm_id: 9004
+namespace: //corp.huylab.internal/Shares
+domain: CORP
+
+clients:
+  hq-cl: { name: hq-prb07, vm_id: 963, bridge: vmbr10, vlan: 30 }
+  br-cl: { name: br-prb04, vm_id: 964, bridge: vmbr20, vlan: 130 } # reaches hq-fs01 through the tunnel
+
+# visible: exactly the namespace folders access-based enumeration shows this user.
+users:
+  u.finance01: { from: hq-cl, visible: [Finance, Public] }
+  u.sales01: { from: br-cl, visible: [Public, Sales] }
+  u.manager01: { from: hq-cl, visible: [Finance, Public, Sales] }
+  u.it01: { from: hq-cl, visible: [IT, Public] }
+
+cases:
+  - { user: u.finance01, folder: Finance, op: write, expect: allow, why: Finance RW via G-Finance -> DL-FS-Finance-RW }
+  - { user: u.finance01, folder: Public, op: read, expect: allow, why: Everyone reads Public (Domain Users -> DL-FS-Public-RO) }
+  - { user: u.finance01, folder: Public, op: write, expect: deny, why: Public is read-only for users }
+  - { user: u.finance01, folder: Sales, op: read, expect: deny, why: Finance cannot open Sales }
+  - { user: u.sales01, folder: Sales, op: write, expect: allow, why: Branch user writes its share at HQ through the tunnel }
+  - { user: u.sales01, folder: Finance, op: read, expect: deny, why: Sales cannot open Finance }
+  - { user: u.manager01, folder: Finance, op: read, expect: allow, why: Managers read Finance (G-Management -> DL-FS-Finance-RO) }
+  - { user: u.manager01, folder: Finance, op: write, expect: deny, why: Managers cannot change Finance }
+  - { user: u.manager01, folder: Sales, op: read, expect: allow, why: Managers read Sales }
+  - { user: u.it01, folder: IT, op: write, expect: allow, why: IT RW }
+  - { user: u.it01, folder: Public, op: write, expect: allow, why: IT publishes to Public }
+  - { user: u.it01, folder: Finance, op: read, expect: deny, why: IT admins are not Finance readers }
