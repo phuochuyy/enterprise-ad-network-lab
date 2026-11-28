@@ -16,3 +16,13 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), versioning: [S
 - Evidence capture scripts: `scripts/media/shot.sh`, `rec.sh`, `cast.sh`
 - ADR-0001 (record decisions), ADR-0002 (platform and tooling)
 - Network & IP design (`docs/architecture.md`) and ADR-0003 (addressing, naming, AD domain name)
+- Packer Windows templates (Server 2022 Core/Desktop, Windows 11) with cloudbase-init and WinRM HTTPS on first boot
+- `pve-vm`: configdrive2 and user-less cloud-init for Windows clones
+- `scripts/smoke-test.sh`: clone-boot-verify acceptance test for templates (env `terraform/envs/template-smoke`)
+- `scripts/diag/win-offline-logs.sh`: read-only Setup/cloudbase-init log pull from a stopped VM's disk
+- Lint hook `check-unattend`: answer-file command lengths within Windows Setup limits
+
+### Fixed
+
+- Windows clones hung at first boot: the specialize pass rejected the answer file (inline command over the 259-char `Path` limit) - see [RCA](docs/rca/2026-11-28-ws2022-clone-hang.md)
+- Windows clones kept a `WIN-XXXX` name: hostname is now read from Proxmox user_data
