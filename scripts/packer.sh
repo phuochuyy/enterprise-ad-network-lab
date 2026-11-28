@@ -1,22 +1,33 @@
 #!/usr/bin/env bash
-# Build a Windows template with Packer, credentials loaded from user-only files.
+# Build a template with Packer, credentials loaded from user-only files.
 #
-# Usage: scripts/packer.sh <ws2022-core|ws2022-desktop|win11> [init|validate|build] [extra packer args]
+# Usage: scripts/packer.sh <ws2022-core|ws2022-desktop|win11|opnsense> [init|validate|build] [extra packer args]
 #
 #   Proxmox token : ~/.config/pve/terraform-token.json (same token as Terraform)
-#   Lab secrets   : ~/.config/lab/secrets.json  {"admin_password": "..."} - generated on first use
+#   Lab secrets   : ~/.config/lab/secrets.json  {"admin_password": "...", "opnsense_root_password": "..."}
+#                   admin_password is generated on first use
+#   SSH key       : ~/.config/lab/id_ed25519 (lab automation key; OPNsense root login)
 set -euo pipefail
 
 TOKEN_FILE="${TOKEN_FILE:-${HOME}/.config/pve/terraform-token.json}"
 SECRETS_FILE="${SECRETS_FILE:-${HOME}/.config/lab/secrets.json}"
 ROOT="$(git -C "$(dirname "$0")" rev-parse --show-toplevel)"
-PKR_DIR="${ROOT}/packer/windows"
+SSH_KEY="${SSH_KEY:-${HOME}/.config/lab/id_ed25519}"
 
 die() { echo "error: $*" >&2; exit 1; }
 
 target="${1:-}"; action="${2:-build}"
-[[ -f "${PKR_DIR}/vars/${target}.pkrvars.hcl" ]] \
-  || die "usage: $(basename "$0") <$(find "${PKR_DIR}/vars" -name '*.pkrvars.hcl' -printf '%f\n' | sed 's/.pkrvars.hcl//' | sort | paste -sd'|')> [init|validate|build]"
+# Windows templates share one source, parameterised by vars/<target>.pkrvars.hcl; other targets
+# are a directory of their own under packer/.
+if [[ -n "${target}" && -f "${ROOT}/packer/windows/vars/${target}.pkrvars.hcl" ]]; then
+  PKR_DIR="${ROOT}/packer/windows"
+  var_args=(-var-file="vars/${target}.pkrvars.hcl")
+elif [[ "${target}" == "opnsense" ]]; then
+  PKR_DIR="${ROOT}/packer/opnsense"
+  var_args=()
+else
+  die "usage: $(basename "$0") <$(find "${ROOT}/packer/windows/vars" -name '*.pkrvars.hcl' -printf '%f\n' | sed 's/.pkrvars.hcl//' | sort | paste -sd'|')|opnsense> [init|validate|build]"
+fi
 shift $(( $# >= 2 ? 2 : 1 ))
 
 check_mode() { [[ "$(stat -c %a "$1")" == "600" ]] || die "$1 must be chmod 600"; }
@@ -44,15 +55,24 @@ PROXMOX_TOKEN="$(jq -er '.value' "${TOKEN_FILE}")"
 PKR_VAR_admin_password="$(jq -er '.admin_password' "${SECRETS_FILE}")"
 export PROXMOX_URL PROXMOX_USERNAME PROXMOX_TOKEN PKR_VAR_admin_password
 
+if [[ "${target}" == "opnsense" ]]; then
+  check_mode "${SSH_KEY}"
+  # OPNsense verifies with PHP password_verify(), which accepts crypt(3) SHA-512 hashes.
+  PKR_VAR_root_password_hash="$(jq -er '.opnsense_root_password' "${SECRETS_FILE}" | openssl passwd -6 -stdin)"
+  PKR_VAR_ssh_public_key="$(cat "${SSH_KEY}.pub")"
+  PKR_VAR_ssh_private_key_file="${SSH_KEY}"
+  export PKR_VAR_root_password_hash PKR_VAR_ssh_public_key PKR_VAR_ssh_private_key_file
+fi
+
 cd "${PKR_DIR}"
 case "${action}" in
   init) exec packer init . ;;
-  validate) exec packer validate -var-file="vars/${target}.pkrvars.hcl" "$@" . ;;
+  validate) exec packer validate "${var_args[@]}" "$@" . ;;
   build)
     mkdir -p logs
     PACKER_LOG_PATH="logs/${target}-$(date +%Y%m%d-%H%M%S).log"
     export PACKER_LOG=1 PACKER_LOG_PATH
-    exec packer build -force -on-error=abort -var-file="vars/${target}.pkrvars.hcl" "$@" .
+    exec packer build -force -on-error=abort "${var_args[@]}" "$@" .
     ;;
   *) die "unknown action: ${action}" ;;
 esac
