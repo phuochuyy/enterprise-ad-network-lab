@@ -204,5 +204,22 @@
         </servers>
       </server>
     </wireguard>
+    <DHCRelay version="1.0.1" description="DHCRelay configuration">
+{% for r in opnsense_dhcp_relays %}
+      <relays uuid="{{ (inventory_hostname ~ '/dhcrelay/' ~ r.iface) | to_uuid }}">
+        <enabled>1</enabled>
+        <interface>{{ ifmap[r.iface] }}</interface>
+        <destination>{{ (inventory_hostname ~ '/dhcrelay-dest/' ~ r.iface) | to_uuid }}</destination>
+        <agent_info>0</agent_info>
+        <carp_depend_on/>
+      </relays>
+{% endfor %}
+{% for r in opnsense_dhcp_relays %}
+      <destinations uuid="{{ (inventory_hostname ~ '/dhcrelay-dest/' ~ r.iface) | to_uuid }}">
+        <name>{{ r.iface }}-dhcp</name>
+        <server>{{ r.servers | join(',') }}</server>
+      </destinations>
+{% endfor %}
+    </DHCRelay>
   </OPNsense>
 </opnsense>

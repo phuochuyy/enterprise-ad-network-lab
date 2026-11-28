@@ -1,0 +1,26 @@
+# DHCP failover test (issue #8): DHCP clients in each site's Users VLAN, and the scenarios that
+# take one domain controller down at a time. Read by terraform/envs/dhcp-test (clients) and
+# tests/dhcp/run.py (everything else).
+template_vm_id: 9004
+
+clients:
+  hq-cl: { name: hq-prb06, vm_id: 961, bridge: vmbr10, vlan: 30, scope: 172.16.30.0 }
+  br-cl: { name: br-prb03, vm_id: 962, bridge: vmbr20, vlan: 130, scope: 172.17.30.0 }
+
+dcs:
+  hq-dc01: { vm_id: 201, ip: 172.16.20.11 }
+  br-dc01: { vm_id: 202, ip: 172.17.20.11 }
+
+failover_name: HQ-BRANCH-DHCP
+domain: corp.huylab.internal
+
+# Expected DHCP options per client (from group_vars/domain_controllers.yml dhcp_scopes).
+expect:
+  hq-cl: { range: [172.16.30.100, 172.16.30.199], router: 172.16.30.1, dns: [172.16.20.11, 172.17.20.11] }
+  br-cl: { range: [172.17.30.100, 172.17.30.199], router: 172.17.30.1, dns: [172.17.20.11, 172.16.20.11] }
+
+# Each scenario: shut a DC down, make the clients run a fresh DHCP exchange, expect the survivor
+# to answer (through the relay - and the tunnel for the other site), bring the DC back.
+scenarios:
+  - { down: hq-dc01, survivor: br-dc01 }
+  - { down: br-dc01, survivor: hq-dc01 }

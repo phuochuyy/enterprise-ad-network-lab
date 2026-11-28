@@ -1,0 +1,8 @@
+# DHCP failover pair on the domain controllers (issue #8). Run: scripts/ansible.sh playbooks/dhcp.yml
+# Firewall relays for the client VLANs come from playbooks/firewalls.yml (opnsense_dhcp_relays).
+- name: DHCP failover on the domain controllers
+  hosts: domain_controllers
+  gather_facts: false
+  become: true # see group_vars/domain_controllers.yml (double hop: the failover setup talks to the partner)
+  roles:
+    - dhcp

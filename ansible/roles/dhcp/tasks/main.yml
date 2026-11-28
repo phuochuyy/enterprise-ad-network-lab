@@ -1,0 +1,127 @@
+# Windows DHCP failover pair on the domain controllers (issue #8).
+- name: DHCP Server role
+  ansible.windows.win_feature:
+    name: DHCP
+    include_management_tools: true
+
+- name: DHCP security groups and post-install flag
+  ansible.windows.win_powershell:
+    script: |
+      $ErrorActionPreference = 'Stop'
+      $Ansible.Changed = $false
+      if (-not (Get-ADGroup -Filter "Name -eq 'DHCP Administrators'")) {
+          Add-DhcpServerSecurityGroup
+          Restart-Service DHCPServer
+          $Ansible.Changed = $true
+      }
+      # Tells Server Manager the post-install configuration is done (otherwise it nags forever).
+      $key = 'HKLM:\SOFTWARE\Microsoft\ServerManager\Roles\12'
+      if ((Get-ItemProperty $key -ErrorAction SilentlyContinue).ConfigurationState -ne 2) {
+          Set-ItemProperty $key -Name ConfigurationState -Value 2
+          $Ansible.Changed = $true
+      }
+
+- name: Authorize this DHCP server in AD
+  ansible.windows.win_powershell:
+    parameters:
+      Ip: "{{ ansible_host }}"
+    script: |
+      param([string]$Ip)
+      $ErrorActionPreference = 'Stop'
+      $fqdn = "$env:COMPUTERNAME.$env:USERDNSDOMAIN".ToLower()
+      $Ansible.Changed = -not (Get-DhcpServerInDC | Where-Object { $_.IPAddress -eq $Ip })
+      if ($Ansible.Changed) { Add-DhcpServerInDC -DnsName $fqdn -IPAddress $Ip }
+
+- name: Scopes and options (primary; replicated by failover)
+  ansible.windows.win_powershell:
+    parameters:
+      ScopesJson: "{{ dhcp_scopes | to_json }}"
+      Domain: "{{ ad_domain }}"
+    script: |
+      param([string]$ScopesJson, [string]$Domain)
+      $ErrorActionPreference = 'Stop'
+      $Ansible.Changed = $false
+      foreach ($s in ($ScopesJson | ConvertFrom-Json)) {
+          $scope = Get-DhcpServerv4Scope -ScopeId $s.subnet -ErrorAction SilentlyContinue
+          if (-not $scope) {
+              Add-DhcpServerv4Scope -Name $s.name -StartRange $s.start -EndRange $s.end -SubnetMask $s.mask `
+                  -LeaseDuration ([TimeSpan]$s.lease) -State Active
+              $Ansible.Changed = $true
+          }
+          $opts = Get-DhcpServerv4OptionValue -ScopeId $s.subnet -ErrorAction SilentlyContinue
+          $router = ($opts | Where-Object OptionId -eq 3).Value
+          $dns = ($opts | Where-Object OptionId -eq 6).Value
+          $dom = ($opts | Where-Object OptionId -eq 15).Value
+          if ("$router" -ne $s.router -or ($dns -join ',') -ne ($s.dns -join ',') -or "$dom" -ne $Domain) {
+              Set-DhcpServerv4OptionValue -ScopeId $s.subnet -Router $s.router -DnsServer $s.dns -DnsDomain $Domain -Force
+              $Ansible.Changed = $true
+          }
+      }
+  register: dhcp_scopes_result
+  when: inventory_hostname == dhcp_primary
+
+- name: Failover relationship (load balance)
+  ansible.windows.win_powershell:
+    parameters:
+      Name: "{{ dhcp_failover.name }}"
+      Partner: "{{ dhcp_failover.partner }}.{{ ad_domain }}"
+      ScopesJson: "{{ dhcp_scopes | map(attribute='subnet') | list | to_json }}"
+      Percent: "{{ dhcp_failover.load_balance_percent }}"
+      Mclt: "{{ dhcp_failover.max_client_lead_time }}"
+      Switch: "{{ dhcp_failover.state_switch_interval }}"
+      Secret: "{{ lab_secrets.dhcp_failover_secret }}"
+    script: |
+      param([string]$Name, [string]$Partner, [string]$ScopesJson, [int]$Percent, [string]$Mclt, [string]$Switch, [string]$Secret)
+      $ErrorActionPreference = 'Stop'
+      $Ansible.Changed = $false
+      # Windows PowerShell 5.1 returns a JSON array from ConvertFrom-Json as ONE object: @(...)
+      # would nest it (first run: -ScopeId got a nested array and the creation failed). Unroll.
+      $scopes = @($ScopesJson | ConvertFrom-Json | ForEach-Object { $_ })
+      $fo = Get-DhcpServerv4Failover -Name $Name -ErrorAction SilentlyContinue
+      if (-not $fo) {
+          Add-DhcpServerv4Failover -Name $Name -PartnerServer $Partner -ScopeId $scopes -LoadBalancePercent $Percent `
+              -MaxClientLeadTime ([TimeSpan]$Mclt) -AutoStateTransition $true -StateSwitchInterval ([TimeSpan]$Switch) `
+              -SharedSecret $Secret -Force
+          $Ansible.Changed = $true
+      } else {
+          $missing = $scopes | Where-Object { "$_" -notin @($fo.ScopeId | ForEach-Object { "$_" }) }
+          if ($missing) { Add-DhcpServerv4FailoverScope -Name $Name -ScopeId $missing; $Ansible.Changed = $true }
+          # Enforce the tunables on an existing relationship too, not only at creation.
+          if ($fo.LoadBalancePercent -ne $Percent -or $fo.MaxClientLeadTime -ne [TimeSpan]$Mclt -or
+              -not $fo.AutoStateTransition -or $fo.StateSwitchInterval -ne [TimeSpan]$Switch) {
+              Set-DhcpServerv4Failover -Name $Name -LoadBalancePercent $Percent -MaxClientLeadTime ([TimeSpan]$Mclt) `
+                  -AutoStateTransition $true -StateSwitchInterval ([TimeSpan]$Switch) -Force
+              $Ansible.Changed = $true
+          }
+      }
+  register: dhcp_failover_result
+  no_log: true # the shared secret is a module parameter
+  when: inventory_hostname == dhcp_primary
+
+- name: Push changed scope options to the partner
+  ansible.windows.win_powershell:
+    parameters:
+      Name: "{{ dhcp_failover.name }}"
+    script: |
+      param([string]$Name)
+      Invoke-DhcpServerv4FailoverReplication -Name $Name -Force | Out-Null
+  when:
+    - inventory_hostname == dhcp_primary
+    - dhcp_scopes_result is changed or dhcp_failover_result is changed
+
+- name: Failover state is Normal and every scope is served on this DC
+  ansible.windows.win_powershell:
+    parameters:
+      Name: "{{ dhcp_failover.name }}"
+      ScopesJson: "{{ dhcp_scopes | map(attribute='subnet') | list | to_json }}"
+    script: |
+      param([string]$Name, [string]$ScopesJson)
+      $Ansible.Changed = $false
+      $fo = Get-DhcpServerv4Failover -Name $Name -ErrorAction SilentlyContinue
+      $served = @(Get-DhcpServerv4Scope | Where-Object State -eq Active | ForEach-Object { "$($_.ScopeId)" })
+      @{ state = "$($fo.State)"; mode = "$($fo.Mode)"; percent = "$($fo.LoadBalancePercent)";
+         missing = @($ScopesJson | ConvertFrom-Json | ForEach-Object { $_ } | Where-Object { $_ -notin $served }) }
+  register: dhcp_health
+  until: dhcp_health.output[0].state == 'Normal' and dhcp_health.output[0].missing | length == 0
+  retries: 10
+  delay: 15

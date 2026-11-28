@@ -5,6 +5,7 @@
 #   wireguard.keys.<name>  {private, public}  one per WireGuard instance and per road-warrior peer
 #   wireguard.psk.<name>   pre-shared key per site-to-site tunnel (post-quantum hardening)
 #   ad_dsrm_password       Directory Services Restore Mode password of the domain controllers
+#   dhcp_failover_secret   shared secret of the DHCP failover relationship between the DCs
 set -euo pipefail
 
 SECRETS_FILE="${SECRETS_FILE:-${HOME}/.config/lab/secrets.json}"
@@ -46,7 +47,7 @@ while True:
     if any(c.islower() for c in p) and any(c.isupper() for c in p) and any(c.isdigit() for c in p) and any(c in "-_.@#" for c in p):
         print(p); break'
 }
-PASSWORDS=(ad_dsrm_password)
+PASSWORDS=(ad_dsrm_password dhcp_failover_secret)
 for name in "${PASSWORDS[@]}"; do
   if ! jq -e --arg n "${name}" '.[$n]' "${tmp}" >/dev/null; then
     jq --arg n "${name}" --arg pw "$(gen_password)" '.[$n] = $pw' "${tmp}" >"${tmp}.new" && mv "${tmp}.new" "${tmp}"

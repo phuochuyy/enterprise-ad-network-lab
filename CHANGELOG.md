@@ -29,6 +29,8 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), versioning: [S
 - `scripts/smoke-test.sh linux`: cloud-init hostname/IP/SSH key, cloud-init done, guest agent answering the Proxmox API
 - WireGuard site-to-site HQ <-> Branch (routed, PSK) and remote-access VPN for admins on hq-fw01 (ADR-0005); handshake asserted on every converge; `scripts/lab-secrets.sh` for keys
 - AD DS forest `corp.huylab.internal`: hq-dc01 (HQ, all FSMO) and br-dc01 (BRANCH) via Terraform + Ansible role `ad_ds` - Sites and Services, DNS forwarders and reverse zones, PDC time from the firewall, OU design (tiered admin, per-site, AGDLP); health gates (dcdiag, SYSVOL, repadmin) and `docs/ad/health-report.md`
+- DHCP failover (load balance 50/50) on hq-dc01/br-dc01 for the HQ and Branch Users scopes (role `dhcp`), DHCP relay to both DCs on both firewalls; `scripts/dhcp-failover-test.sh` proves either DC can go down (42/42, `docs/dhcp/failover-test-report.md`)
+- `tests/lib/pve.py`: Proxmox API helpers shared by the lab tests
 - `scripts/host/lab-routes`: host routes into the site supernets via the firewall WANs (ifupdown hook)
 - Firewall policy test (`scripts/fw-policy-test.sh`, `tests/firewall/policy.yml`): 57 cases: inter-VLAN, cross-site over the tunnel, WAN exposure, remote-access VPN, TCP traceroute through the tunnel; real traffic from probe VMs, report in `docs/network/policy-test-report.md`
 

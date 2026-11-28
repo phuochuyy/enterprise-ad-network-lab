@@ -36,6 +36,7 @@ opnsense_aliases_common:
     description: AD DS client ports (TCP)
   - { name: PORTS_AD_UDP, type: port, content: ["53", "88", "123", "389", "464"], description: AD DS client ports (UDP) }
   - { name: PORTS_INFRA_UDP, type: port, content: ["53", "123"], description: DNS and NTP on the firewall }
+  - { name: PORTS_DHCP_FAILOVER, type: port, content: ["647"], description: Windows DHCP failover partner traffic }
 
 # WireGuard (issue #6). Keys come from secrets.json (scripts/lab-secrets.sh), never from the repo.
 # Each instance: name, instance (wgN), port, tunnel address, peers (keys of opnsense_wg_peers).
@@ -43,3 +44,7 @@ opnsense_aliases_common:
 # endpoint/port for peers this side dials, psk (wireguard.psk.<psk>), keepalive.
 opnsense_wg_instances: []
 opnsense_wg_peers: {}
+
+# DHCP relay (issue #8): client VLANs have no DHCP server of their own; the firewall relays to
+# BOTH domain controllers (the remote one through the tunnel), which run a failover pair.
+opnsense_dhcp_relays: []
