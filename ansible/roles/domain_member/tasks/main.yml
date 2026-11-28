@@ -1,0 +1,18 @@
+# Join a Windows server to the domain in the OU given by host var ad_ou, before anything else.
+- name: Resolve through the domain controllers (own site first)
+  ansible.windows.win_dns_client:
+    adapter_names: "*"
+    dns_servers: >-
+      {{ (groups['domain_controllers'] | map('extract', hostvars) | selectattr('ad_site', 'equalto', ad_site)
+          | map(attribute='ansible_host') | list)
+         + (groups['domain_controllers'] | map('extract', hostvars) | rejectattr('ad_site', 'equalto', ad_site)
+          | map(attribute='ansible_host') | list) }}
+
+- name: Join {{ ad_domain }}
+  microsoft.ad.membership:
+    dns_domain_name: "{{ ad_domain }}"
+    domain_admin_user: "Administrator@{{ ad_domain }}"
+    domain_admin_password: "{{ lab_secrets.admin_password }}"
+    domain_ou_path: "{{ ad_ou }},{{ ad_domain.split('.') | map('regex_replace', '^', 'DC=') | join(',') }}"
+    state: domain
+    reboot: true

@@ -1,7 +1,6 @@
 # AD DS forest (issue #7, ADR-0003). hq-dc01 creates the forest; br-dc01 joins as a second DC
 # in its own site. Every value below is applied idempotently by playbooks/ad.yml.
 # ad_domain comes from group_vars/all.yml
-ad_netbios: CORP
 ad_domain_dn: "{{ ad_domain.split('.') | map('regex_replace', '^', 'DC=') | join(',') }}"
 ad_forest_root_dc: hq-dc01
 ad_dsrm_password: "{{ lab_secrets.ad_dsrm_password }}"
