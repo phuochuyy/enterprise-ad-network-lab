@@ -53,3 +53,11 @@ repos:
         entry: python3 scripts/lint/check-unattend.py
         language: system
         files: ^packer/windows/answer/.*\.xml(\.pkrtpl)?$
+
+  - repo: https://github.com/ansible/ansible-lint
+    rev: v26.11.1
+    hooks:
+      - id: ansible-lint
+        files: ^ansible/
+        args: [--project-dir, ansible]
+        language_version: python3

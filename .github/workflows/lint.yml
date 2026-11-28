@@ -57,10 +57,14 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        template: [ws2022-core, ws2022-desktop, win11]
+        include:
+          - { template: ws2022-core, dir: packer/windows, var_args: -var-file=vars/ws2022-core.pkrvars.hcl }
+          - { template: ws2022-desktop, dir: packer/windows, var_args: -var-file=vars/ws2022-desktop.pkrvars.hcl }
+          - { template: win11, dir: packer/windows, var_args: -var-file=vars/win11.pkrvars.hcl }
+          - { template: opnsense, dir: packer/opnsense, var_args: "" }
     defaults:
       run:
-        working-directory: packer/windows
+        working-directory: ${{ matrix.dir }}
     steps:
       - uses: actions/checkout@v4
 
@@ -74,6 +78,9 @@ jobs:
           echo "::add-mask::$pw"; echo "::add-mask::$tok"
           {
             echo "PKR_VAR_admin_password=$pw"
+            echo "PKR_VAR_root_password_hash=$(openssl passwd -6 "$pw")"
+            echo "PKR_VAR_ssh_public_key=ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIC0000000000000000000000000000000000000000000 ci"
+            echo "PKR_VAR_ssh_private_key_file=/dev/null"
             echo "PROXMOX_TOKEN=$tok"
             echo "PROXMOX_USERNAME=ci@pve!validate"
             echo "PROXMOX_URL=https://pve.invalid:8006/api2/json"
@@ -85,4 +92,4 @@ jobs:
         env:
           PACKER_GITHUB_API_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       - run: packer fmt -check -diff -recursive .
-      - run: packer validate -var-file=vars/${{ matrix.template }}.pkrvars.hcl .
+      - run: packer validate ${{ matrix.var_args }} .
