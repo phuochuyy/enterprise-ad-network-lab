@@ -131,6 +131,16 @@ build {
     destination = "${local.cbi_root}/LocalScripts/"
   }
 
+  # Run by the specialize pass of every clone (referenced from unattend-sysprep.xml).
+  provisioner "powershell" {
+    inline = ["New-Item -ItemType Directory -Force -Path C:/Windows/Setup/Scripts | Out-Null"]
+  }
+
+  provisioner "file" {
+    source      = "${path.root}/setup/reset-build-network.ps1"
+    destination = "C:/Windows/Setup/Scripts/reset-build-network.ps1"
+  }
+
   provisioner "file" {
     content     = templatefile("${path.root}/answer/unattend-sysprep.xml.pkrtpl", local.answer_vars)
     destination = "${local.cbi_root}/conf/Unattend.xml"

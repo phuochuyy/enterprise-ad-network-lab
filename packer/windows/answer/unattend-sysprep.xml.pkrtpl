@@ -17,11 +17,12 @@
     </component>
     <component name="Microsoft-Windows-Deployment" processorArchitecture="amd64" publicKeyToken="31bf3856ad364e35" language="neutral" versionScope="nonSxS">
       <RunSynchronous>
-        <!-- Drop the template's temporary build IP, DNS and persistent default route so the clone
-             starts clean; cloudbase-init then applies the Terraform-defined address (or DHCP). -->
+        <!-- Drop the template's temporary build IP, DNS and default route (setup/reset-build-network.ps1).
+             Path is limited to 259 characters, so logic lives in scripts, never inline here
+             (enforced by scripts/lint/check-unattend.py). -->
         <RunSynchronousCommand wcm:action="add">
           <Order>1</Order>
-          <Path>powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "Get-NetAdapter | ForEach-Object { Remove-NetIPAddress -InterfaceIndex $_.ifIndex -AddressFamily IPv4 -Confirm:$false -ErrorAction SilentlyContinue; Remove-NetRoute -InterfaceIndex $_.ifIndex -DestinationPrefix 0.0.0.0/0 -Confirm:$false -ErrorAction SilentlyContinue; Set-NetIPInterface -InterfaceIndex $_.ifIndex -Dhcp Enabled; Set-DnsClientServerAddress -InterfaceIndex $_.ifIndex -ResetServerAddresses }"</Path>
+          <Path>powershell.exe -NoProfile -ExecutionPolicy Bypass -File C:\Windows\Setup\Scripts\reset-build-network.ps1</Path>
           <Description>Reset build network</Description>
         </RunSynchronousCommand>
         <RunSynchronousCommand wcm:action="add">
