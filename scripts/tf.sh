@@ -21,4 +21,11 @@ fi
 PROXMOX_VE_API_TOKEN="$(jq -er '."full-tokenid" + "=" + .value' "${TOKEN_FILE}")"
 export PROXMOX_VE_API_TOKEN
 
+# Lab automation public key for cloud-init users (not a secret, but lives outside the repo).
+SSH_PUBKEY_FILE="${SSH_PUBKEY_FILE:-${HOME}/.config/lab/id_ed25519.pub}"
+if [[ -r "${SSH_PUBKEY_FILE}" ]]; then
+  TF_VAR_lab_ssh_public_key="$(cat "${SSH_PUBKEY_FILE}")"
+  export TF_VAR_lab_ssh_public_key
+fi
+
 exec terraform -chdir="${ROOT}/terraform/envs/${TF_ENV}" "$@"

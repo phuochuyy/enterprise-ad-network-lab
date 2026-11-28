@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Build a template with Packer, credentials loaded from user-only files.
 #
-# Usage: scripts/packer.sh <ws2022-core|ws2022-desktop|win11|opnsense> [init|validate|build] [extra packer args]
+# Usage: scripts/packer.sh <ws2022-core|ws2022-desktop|win11|opnsense|ubuntu> [init|validate|build] [extra packer args]
 #
 #   Proxmox token : ~/.config/pve/terraform-token.json (same token as Terraform)
 #   Lab secrets   : ~/.config/lab/secrets.json  {"admin_password": "...", "opnsense_root_password": "..."}
@@ -22,11 +22,11 @@ target="${1:-}"; action="${2:-build}"
 if [[ -n "${target}" && -f "${ROOT}/packer/windows/vars/${target}.pkrvars.hcl" ]]; then
   PKR_DIR="${ROOT}/packer/windows"
   var_args=(-var-file="vars/${target}.pkrvars.hcl")
-elif [[ "${target}" == "opnsense" ]]; then
-  PKR_DIR="${ROOT}/packer/opnsense"
+elif [[ "${target}" == "opnsense" || "${target}" == "ubuntu" ]]; then
+  PKR_DIR="${ROOT}/packer/${target}"
   var_args=()
 else
-  die "usage: $(basename "$0") <$(find "${ROOT}/packer/windows/vars" -name '*.pkrvars.hcl' -printf '%f\n' | sed 's/.pkrvars.hcl//' | sort | paste -sd'|')|opnsense> [init|validate|build]"
+  die "usage: $(basename "$0") <$(find "${ROOT}/packer/windows/vars" -name '*.pkrvars.hcl' -printf '%f\n' | sed 's/.pkrvars.hcl//' | sort | paste -sd'|')|opnsense|ubuntu> [init|validate|build]"
 fi
 shift $(( $# >= 2 ? 2 : 1 ))
 
@@ -55,13 +55,16 @@ PROXMOX_TOKEN="$(jq -er '.value' "${TOKEN_FILE}")"
 PKR_VAR_admin_password="$(jq -er '.admin_password' "${SECRETS_FILE}")"
 export PROXMOX_URL PROXMOX_USERNAME PROXMOX_TOKEN PKR_VAR_admin_password
 
-if [[ "${target}" == "opnsense" ]]; then
+if [[ "${target}" == "opnsense" || "${target}" == "ubuntu" ]]; then
   check_mode "${SSH_KEY}"
+  PKR_VAR_ssh_private_key_file="${SSH_KEY}"
+  export PKR_VAR_ssh_private_key_file
+fi
+if [[ "${target}" == "opnsense" ]]; then
   # OPNsense verifies with PHP password_verify(), which accepts crypt(3) SHA-512 hashes.
   PKR_VAR_root_password_hash="$(jq -er '.opnsense_root_password' "${SECRETS_FILE}" | openssl passwd -6 -stdin)"
   PKR_VAR_ssh_public_key="$(cat "${SSH_KEY}.pub")"
-  PKR_VAR_ssh_private_key_file="${SSH_KEY}"
-  export PKR_VAR_root_password_hash PKR_VAR_ssh_public_key PKR_VAR_ssh_private_key_file
+  export PKR_VAR_root_password_hash PKR_VAR_ssh_public_key
 fi
 
 cd "${PKR_DIR}"

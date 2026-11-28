@@ -81,8 +81,9 @@ Reserved for companion repos: `3xx` Hyper-V/Veeam (`hyperv-ha-dr-lab`), `4xx` mo
 | 9001 | `tpl-ws2022-core` |
 | 9002 | `tpl-ws2022-desktop` |
 | 9003 | `tpl-win11-ent` |
-| 9004 | `tpl-ubuntu-2404` |
+| 9004 | `tpl-ubuntu-2404`: cloud image + qemu-guest-agent + updates, cloud-init clean (Packer `proxmox-clone`) |
 | 9005 | `tpl-opnsense-26.7` (see ADR-0004) |
+| 9100 | `base-ubuntu-2404-cloudimg`: unmodified cloud image (Terraform), source of 9004 |
 
 ## Firewall configuration
 

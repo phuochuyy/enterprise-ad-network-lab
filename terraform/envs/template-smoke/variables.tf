@@ -38,3 +38,33 @@ variable "test_ip" {
   type        = string
   default     = "10.10.10.60"
 }
+
+variable "bios" {
+  description = "Firmware of the clone: ovmf (Windows templates) or seabios (Linux/OPNsense templates)."
+  type        = string
+  default     = "ovmf"
+}
+
+variable "memory_mb" {
+  description = "RAM of the clone."
+  type        = number
+  default     = 4096
+}
+
+variable "ci_type" {
+  description = "Cloud-init drive format: configdrive2 (cloudbase-init, Windows) or nocloud (Linux)."
+  type        = string
+  default     = "configdrive2"
+}
+
+variable "ci_username" {
+  description = "Cloud-init user (Linux only; Windows templates keep their own Administrator)."
+  type        = string
+  default     = null
+}
+
+variable "ci_ssh_keys" {
+  description = "SSH public keys for ci_username."
+  type        = list(string)
+  default     = []
+}
