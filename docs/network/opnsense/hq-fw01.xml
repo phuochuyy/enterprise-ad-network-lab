@@ -42,7 +42,7 @@
     <timeservers>0.opnsense.pool.ntp.org 1.opnsense.pool.ntp.org</timeservers>
     <webgui>
       <protocol>https</protocol>
-      <ssl-certref>6b0a9983c38b3</ssl-certref>
+      <ssl-certref>CERTREF</ssl-certref>
     </webgui>
     <disablenatreflection>yes</disablenatreflection>
     <usevirtualterminal>1</usevirtualterminal>
@@ -659,7 +659,7 @@
         <interface />
         <start />
         <stop />
-        <tests>552f092d-b489-492a-b6f8-691d600b1555,19187d98-35d5-4de5-bacf-b8709c072551,76d4c2d3-03be-4ca3-93f9-7466496ceba7,f2fa31d7-6089-4ab3-88b5-c009028d5552</tests>
+        <tests>UUID-REF x4</tests>
         <depends />
         <polltime />
       </service>
@@ -677,7 +677,7 @@
         <interface />
         <start />
         <stop />
-        <tests>c269bc2c-5409-4e9c-8dd6-4a4e403b69cb</tests>
+        <tests>UUID-REF x1</tests>
         <depends />
         <polltime />
       </service>
@@ -695,7 +695,7 @@
         <interface />
         <start />
         <stop />
-        <tests>d8cc0dd7-743b-4b66-99b8-c7b9fba081c6</tests>
+        <tests>UUID-REF x1</tests>
         <depends />
         <polltime />
       </service>
@@ -713,7 +713,7 @@
         <interface />
         <start />
         <stop />
-        <tests>22da84b4-e270-4f11-ae97-8c8580693eb4</tests>
+        <tests>UUID-REF x1</tests>
         <depends />
         <polltime />
       </service>
@@ -1274,7 +1274,7 @@
   <bridges version="1.0.0" description="Bridge devices" />
   <staticroutes version="1.0.1" description="Static routes" />
   <cert>
-    <refid>6b0a9983c38b3</refid>
+    <refid>CERTREF</refid>
     <descr>Web GUI TLS certificate</descr>
     <crt>REDACTED</crt>
     <prv>REDACTED</prv>
