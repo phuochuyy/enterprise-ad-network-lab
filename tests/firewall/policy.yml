@@ -1,0 +1,78 @@
+# Firewall policy test (issue #5): expected allow/deny between VLANs, checked with real traffic.
+# Single source of truth: terraform/envs/fw-test creates the probes from `probes`, and
+# tests/firewall/run.py starts the listeners and runs the `cases`.
+#
+# Semantics:
+#   allow - a TCP connect succeeds / a UDP reply comes back / ping answers
+#   deny  - nothing comes back before the timeout (pf drops; it never rejects)
+# Every TCP/UDP port a case targets is listened on by the target probe, so a "deny" can only
+# come from the firewall, not from a closed port.
+#
+# The server probes take the domain controllers' addresses (172.16.20.11, 172.17.20.11) because
+# the AD rules target them. Run this before #7 deploys the real DCs, or point it at them then.
+
+template_vm_id: 9004
+
+# Keys are the probes' roles in the cases below; `name` follows the <site>-<role><nn> convention.
+
+probes:
+  hq-mgmt: { name: hq-prb01, vm_id: 951, bridge: vmbr10, vlan: 10, ip: 172.16.10.50, gateway: 172.16.10.1 }
+  hq-srv: { name: hq-prb02, vm_id: 952, bridge: vmbr10, vlan: 20, ip: 172.16.20.11, gateway: 172.16.20.1 }
+  hq-usr: { name: hq-prb03, vm_id: 953, bridge: vmbr10, vlan: 30, ip: 172.16.30.150, gateway: 172.16.30.1 }
+  hq-dmz: { name: hq-prb04, vm_id: 954, bridge: vmbr10, vlan: 40, ip: 172.16.40.50, gateway: 172.16.40.1 }
+  br-srv: { name: br-prb01, vm_id: 955, bridge: vmbr20, vlan: 120, ip: 172.17.20.11, gateway: 172.17.20.1 }
+  br-usr: { name: br-prb02, vm_id: 956, bridge: vmbr20, vlan: 130, ip: 172.17.30.150, gateway: 172.17.30.1 }
+
+listen:
+  hq-mgmt: { tcp: [22, 443] }
+  hq-srv: { tcp: [22, 53, 88, 135, 389, 445, 636, 3389, 5986], udp: [53, 88, 123] }
+  hq-usr: { tcp: [22, 3389] }
+  hq-dmz: { tcp: [22, 80, 445] }
+  br-srv: { tcp: [22, 53, 88, 389, 445, 3389], udp: [53] }
+  br-usr: { tcp: [22, 3389] }
+
+# Targets: a probe name, "fw" (the probe's own gateway on the firewall) or an IP address.
+cases:
+  # --- HQ Users -> domain controller: only the AD DS client ports ----------------------------
+  - { from: hq-usr, to: hq-srv, proto: tcp, port: 445, expect: allow, why: Users to DCs - SMB (SYSVOL, GPO) }
+  - { from: hq-usr, to: hq-srv, proto: tcp, port: 389, expect: allow, why: Users to DCs - LDAP }
+  - { from: hq-usr, to: hq-srv, proto: tcp, port: 88, expect: allow, why: Users to DCs - Kerberos }
+  - { from: hq-usr, to: hq-srv, proto: udp, port: 53, expect: allow, why: Users to DCs - DNS }
+  - { from: hq-usr, to: hq-srv, proto: icmp, expect: allow, why: Users ping DCs }
+  - { from: hq-usr, to: hq-srv, proto: tcp, port: 22, expect: deny, why: Users cannot SSH to servers }
+  - { from: hq-usr, to: hq-srv, proto: tcp, port: 3389, expect: deny, why: Users cannot RDP to servers }
+  - { from: hq-usr, to: hq-srv, proto: tcp, port: 5986, expect: deny, why: Users cannot reach WinRM }
+  # --- HQ Users -> everything else internal: denied ------------------------------------------
+  - { from: hq-usr, to: hq-mgmt, proto: tcp, port: 22, expect: deny, why: Users cannot reach the Mgmt VLAN }
+  - { from: hq-usr, to: hq-mgmt, proto: icmp, expect: deny, why: Mgmt VLAN invisible to users }
+  - { from: hq-usr, to: hq-dmz, proto: tcp, port: 80, expect: deny, why: Users cannot reach the DMZ directly }
+  - { from: hq-usr, to: fw, proto: tcp, port: 443, expect: deny, why: Users cannot open the firewall GUI }
+  # --- HQ Users -> Internet: web only, DNS only through the DCs ------------------------------
+  - { from: hq-usr, to: 1.1.1.1, proto: tcp, port: 443, expect: allow, why: Users browse the web }
+  - { from: hq-usr, to: 1.1.1.1, proto: udp, port: 53, expect: deny, why: No direct Internet DNS for clients }
+  # --- HQ Mgmt: trusted admin VLAN -----------------------------------------------------------
+  - { from: hq-mgmt, to: hq-srv, proto: tcp, port: 22, expect: allow, why: Admins manage servers }
+  - { from: hq-mgmt, to: hq-srv, proto: tcp, port: 3389, expect: allow, why: Admins RDP to servers }
+  - { from: hq-mgmt, to: hq-usr, proto: tcp, port: 3389, expect: allow, why: Admins support clients }
+  - { from: hq-mgmt, to: fw, proto: tcp, port: 443, expect: allow, why: Admins open the firewall GUI }
+  # --- HQ Servers ----------------------------------------------------------------------------
+  - { from: hq-srv, to: fw, proto: udp, port: 53, expect: allow, why: Servers resolve through the firewall }
+  - { from: hq-srv, to: 1.1.1.1, proto: tcp, port: 443, expect: allow, why: Servers fetch updates }
+  - { from: hq-srv, to: hq-usr, proto: tcp, port: 22, expect: deny, why: Servers do not initiate to clients }
+  - { from: hq-srv, to: hq-mgmt, proto: tcp, port: 22, expect: deny, why: Servers cannot reach the Mgmt VLAN }
+  # --- HQ DMZ: Internet-facing, isolated from the inside -------------------------------------
+  - { from: hq-dmz, to: hq-srv, proto: tcp, port: 445, expect: deny, why: DMZ isolated from servers }
+  - { from: hq-dmz, to: hq-srv, proto: icmp, expect: deny, why: DMZ cannot even ping inside }
+  - { from: hq-dmz, to: hq-usr, proto: tcp, port: 22, expect: deny, why: DMZ isolated from users }
+  - { from: hq-dmz, to: hq-mgmt, proto: tcp, port: 22, expect: deny, why: DMZ isolated from Mgmt }
+  - { from: hq-dmz, to: 1.1.1.1, proto: tcp, port: 443, expect: allow, why: DMZ reaches the web }
+  # --- Branch --------------------------------------------------------------------------------
+  - { from: br-usr, to: br-srv, proto: tcp, port: 445, expect: allow, why: Branch users to their DC - SMB }
+  - { from: br-usr, to: br-srv, proto: udp, port: 53, expect: allow, why: Branch users to their DC - DNS }
+  - { from: br-usr, to: br-srv, proto: tcp, port: 22, expect: deny, why: Branch users cannot SSH to servers }
+  - { from: br-usr, to: br-srv, proto: tcp, port: 3389, expect: deny, why: Branch users cannot RDP to servers }
+  - { from: br-usr, to: 1.1.1.1, proto: tcp, port: 443, expect: allow, why: Branch users browse the web }
+  - { from: br-srv, to: br-usr, proto: tcp, port: 22, expect: deny, why: Branch servers do not initiate to clients }
+  - { from: br-srv, to: fw, proto: udp, port: 53, expect: allow, why: Branch servers resolve through the firewall }
+  # Cross-site flows (Branch users -> HQ DC/file server, AD replication) need the WireGuard
+  # tunnel; they are added with issue #6.
