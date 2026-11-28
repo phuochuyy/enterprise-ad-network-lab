@@ -79,6 +79,10 @@ jobs:
             echo "PROXMOX_URL=https://pve.invalid:8006/api2/json"
           } >> "$GITHUB_ENV"
 
+      # packer init lists plugin releases through the GitHub API; unauthenticated calls from the
+      # shared runner IPs hit the rate limit (403) and fail the job at random.
       - run: packer init .
+        env:
+          PACKER_GITHUB_API_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       - run: packer fmt -check -diff -recursive .
       - run: packer validate -var-file=vars/${{ matrix.template }}.pkrvars.hcl .
