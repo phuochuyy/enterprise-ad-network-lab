@@ -21,3 +21,9 @@ variable "opnsense_template_vm_id" {
   type        = number
   default     = 9005
 }
+
+variable "lab_ssh_public_key" {
+  description = "Lab automation public key for cloud-init users; scripts/tf.sh reads ~/.config/lab/id_ed25519.pub."
+  type        = string
+  default     = ""
+}

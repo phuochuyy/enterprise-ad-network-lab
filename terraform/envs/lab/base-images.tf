@@ -56,7 +56,7 @@ resource "proxmox_virtual_environment_vm" "ubuntu_base" {
     type         = "nocloud"
     user_account {
       username = "ansible"
-      keys     = [trimspace(file(pathexpand("~/.config/lab/id_ed25519.pub")))]
+      keys     = var.lab_ssh_public_key == "" ? [] : [trimspace(var.lab_ssh_public_key)]
     }
     ip_config {
       ipv4 {
