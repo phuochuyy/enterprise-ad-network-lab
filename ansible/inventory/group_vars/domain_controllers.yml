@@ -44,3 +44,35 @@ ad_ous:
 ansible_become_method: runas
 ansible_become_user: Administrator
 ansible_become_password: "{{ lab_secrets.admin_password }}"
+
+# DHCP (issue #8): both DCs serve both client scopes as a load-balance failover pair; the site
+# firewalls relay the client VLANs to both. Scopes and options are defined on dhcp_primary and
+# replicated to the partner by the failover relationship.
+dhcp_primary: hq-dc01
+dhcp_failover:
+  name: HQ-BRANCH-DHCP
+  partner: br-dc01
+  load_balance_percent: 50
+  # Lab values (production: MCLT 1 h). MCLT bounds how far a server may extend a lease its
+  # partner does not know about - and how long a recovering server stays in RECOVER WAIT before
+  # the pair is Normal again (1 h made every failover test wait an hour). The state switch puts
+  # the survivor into PARTNER DOWN on its own after 2 minutes without contact.
+  max_client_lead_time: "00:05:00"
+  state_switch_interval: "00:02:00"
+dhcp_scopes:
+  - name: HQ-Users
+    subnet: 172.16.30.0
+    mask: 255.255.255.0
+    start: 172.16.30.100
+    end: 172.16.30.199
+    router: 172.16.30.1
+    dns: [172.16.20.11, 172.17.20.11] # own site's DC first
+    lease: "08:00:00"
+  - name: Branch-Users
+    subnet: 172.17.30.0
+    mask: 255.255.255.0
+    start: 172.17.30.100
+    end: 172.17.30.199
+    router: 172.17.30.1
+    dns: [172.17.20.11, 172.16.20.11]
+    lease: "08:00:00"
