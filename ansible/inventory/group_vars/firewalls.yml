@@ -19,6 +19,13 @@ opnsense_aliases_common:
   - { name: BR_DCS, type: host, content: [172.17.20.11], description: br-dc01 }
   - { name: DCS, type: host, content: [172.16.20.11, 172.17.20.11], description: All domain controllers }
   - { name: FILESERVERS, type: host, content: [172.16.20.21], description: hq-fs01 }
+  - { name: HQ_MGMT_NET, type: network, content: [172.16.10.0/24], description: HQ Mgmt VLAN 10 }
+  - { name: HQ_SERVERS_NET, type: network, content: [172.16.20.0/24], description: HQ Servers VLAN 20 }
+  - { name: BR_SERVERS_NET, type: network, content: [172.17.20.0/24], description: Branch Servers VLAN 120 }
+  - { name: BR_USERS_NET, type: network, content: [172.17.30.0/24], description: Branch Users VLAN 130 }
+  - { name: VPN_RA_POOL, type: network, content: [172.31.0.0/24], description: WireGuard remote-access clients }
+  - { name: HQ_FW_WAN, type: host, content: [10.10.10.11], description: hq-fw01 WAN - WireGuard endpoint }
+  - { name: BR_FW_WAN, type: host, content: [10.10.10.12], description: br-fw01 WAN - WireGuard endpoint }
   - { name: PORTS_WEB, type: port, content: ["80", "443"], description: HTTP/HTTPS egress }
   - { name: PORTS_FW_ADMIN, type: port, content: ["22", "443"], description: Firewall SSH and web GUI }
   - { name: PORTS_MGMT, type: port, content: ["22", "443", "3389", "5986"], description: SSH, HTTPS, RDP, WinRM HTTPS }
@@ -29,3 +36,10 @@ opnsense_aliases_common:
     description: AD DS client ports (TCP)
   - { name: PORTS_AD_UDP, type: port, content: ["53", "88", "123", "389", "464"], description: AD DS client ports (UDP) }
   - { name: PORTS_INFRA_UDP, type: port, content: ["53", "123"], description: DNS and NTP on the firewall }
+
+# WireGuard (issue #6). Keys come from secrets.json (scripts/lab-secrets.sh), never from the repo.
+# Each instance: name, instance (wgN), port, tunnel address, peers (keys of opnsense_wg_peers).
+# Each peer: key (secrets.json wireguard.keys.<key>), allowed (AllowedIPs = what is routed to it),
+# endpoint/port for peers this side dials, psk (wireguard.psk.<psk>), keepalive.
+opnsense_wg_instances: []
+opnsense_wg_peers: {}

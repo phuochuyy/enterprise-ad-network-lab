@@ -1,0 +1,14 @@
+# WireGuard remote-access client {{ item.key }} -> {{ inventory_hostname }} ({{ item.value.server }})
+# Rendered by Ansible (role opnsense). Contains a PRIVATE KEY: keep it on the admin's device only.
+[Interface]
+PrivateKey = {{ lab_secrets.wireguard['keys'][item.key].private }}
+Address = {{ item.value.address }}
+
+[Peer]
+PublicKey = {{ lab_secrets.wireguard['keys'][(opnsense_wg_instances | selectattr('name', 'equalto', item.value.server) | first).key].public }}
+Endpoint = {{ ansible_host }}:{{ (opnsense_wg_instances | selectattr('name', 'equalto', item.value.server) | first).port }}
+{% set srv = opnsense_wg_instances | selectattr('name', 'equalto', item.value.server) | first %}
+# Split tunnel: both sites (the Branch through HQ's site-to-site tunnel) and the VPN gateway itself
+# - without it WireGuard drops packets sourced from it (firewall GUI, traceroute hop).
+AllowedIPs = {{ srv.tunnel.split('/')[0] }}/32, 172.16.0.0/16, 172.17.0.0/16
+PersistentKeepalive = 25

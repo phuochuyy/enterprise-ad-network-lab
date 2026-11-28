@@ -5,3 +5,13 @@
     dest: "{{ opnsense_render_dir }}/{{ inventory_hostname }}.xml"
     mode: "0600" # contains the root password hash
   delegate_to: localhost
+
+- name: Render WireGuard road-warrior client configs
+  ansible.builtin.template:
+    src: wg-client.conf.j2
+    dest: "{{ opnsense_render_dir }}/wireguard/{{ item.key }}.conf"
+    mode: "0600"
+  loop: "{{ opnsense_wg_clients | default({}) | dict2items }}"
+  loop_control:
+    label: "{{ item.key }}"
+  delegate_to: localhost

@@ -107,6 +107,15 @@
       <type>none</type>
       <virtual>1</virtual>
     </lo0>
+    <wireguard>
+      <internal_dynamic>1</internal_dynamic>
+      <descr>WireGuard (Group)</descr>
+      <if>wireguard</if>
+      <virtual>1</virtual>
+      <enable>1</enable>
+      <type>group</type>
+      <networks />
+    </wireguard>
   </interfaces>
   <vlans version="1.0.0" description="VLAN configuration">
     <vlan>
@@ -196,6 +205,55 @@
             <type>host</type>
             <content>172.16.20.21</content>
             <description>hq-fs01</description>
+          </alias>
+          <alias>
+            <enabled>1</enabled>
+            <name>HQ_MGMT_NET</name>
+            <type>network</type>
+            <content>172.16.10.0/24</content>
+            <description>HQ Mgmt VLAN 10</description>
+          </alias>
+          <alias>
+            <enabled>1</enabled>
+            <name>HQ_SERVERS_NET</name>
+            <type>network</type>
+            <content>172.16.20.0/24</content>
+            <description>HQ Servers VLAN 20</description>
+          </alias>
+          <alias>
+            <enabled>1</enabled>
+            <name>BR_SERVERS_NET</name>
+            <type>network</type>
+            <content>172.17.20.0/24</content>
+            <description>Branch Servers VLAN 120</description>
+          </alias>
+          <alias>
+            <enabled>1</enabled>
+            <name>BR_USERS_NET</name>
+            <type>network</type>
+            <content>172.17.30.0/24</content>
+            <description>Branch Users VLAN 130</description>
+          </alias>
+          <alias>
+            <enabled>1</enabled>
+            <name>VPN_RA_POOL</name>
+            <type>network</type>
+            <content>172.31.0.0/24</content>
+            <description>WireGuard remote-access clients</description>
+          </alias>
+          <alias>
+            <enabled>1</enabled>
+            <name>HQ_FW_WAN</name>
+            <type>host</type>
+            <content>10.10.10.11</content>
+            <description>hq-fw01 WAN - WireGuard endpoint</description>
+          </alias>
+          <alias>
+            <enabled>1</enabled>
+            <name>BR_FW_WAN</name>
+            <type>host</type>
+            <content>10.10.10.12</content>
+            <description>br-fw01 WAN - WireGuard endpoint</description>
           </alias>
           <alias>
             <enabled>1</enabled>
@@ -323,6 +381,24 @@
             <sequence>40</sequence>
             <action>pass</action>
             <quick>1</quick>
+            <interface>wan</interface>
+            <direction>in</direction>
+            <ipprotocol>inet</ipprotocol>
+            <protocol>UDP</protocol>
+            <source_net>HQ_FW_WAN</source_net>
+            <source_not>0</source_not>
+            <destination_net>wanip</destination_net>
+            <destination_not>0</destination_not>
+            <destination_port>51820</destination_port>
+            <log>0</log>
+            <description>WireGuard site-to-site from HQ</description>
+          </rule>
+          <rule>
+            <enabled>1</enabled>
+            <statetype>keep</statetype>
+            <sequence>50</sequence>
+            <action>pass</action>
+            <quick>1</quick>
             <interface>opt1</interface>
             <direction>in</direction>
             <ipprotocol>inet</ipprotocol>
@@ -338,7 +414,7 @@
           <rule>
             <enabled>1</enabled>
             <statetype>keep</statetype>
-            <sequence>50</sequence>
+            <sequence>60</sequence>
             <action>pass</action>
             <quick>1</quick>
             <interface>opt1</interface>
@@ -356,7 +432,7 @@
           <rule>
             <enabled>1</enabled>
             <statetype>keep</statetype>
-            <sequence>60</sequence>
+            <sequence>70</sequence>
             <action>pass</action>
             <quick>1</quick>
             <interface>opt1</interface>
@@ -374,7 +450,7 @@
           <rule>
             <enabled>1</enabled>
             <statetype>keep</statetype>
-            <sequence>70</sequence>
+            <sequence>80</sequence>
             <action>pass</action>
             <quick>1</quick>
             <interface>opt1</interface>
@@ -392,7 +468,7 @@
           <rule>
             <enabled>1</enabled>
             <statetype>keep</statetype>
-            <sequence>80</sequence>
+            <sequence>90</sequence>
             <action>pass</action>
             <quick>1</quick>
             <interface>opt1</interface>
@@ -410,7 +486,7 @@
           <rule>
             <enabled>1</enabled>
             <statetype>keep</statetype>
-            <sequence>90</sequence>
+            <sequence>100</sequence>
             <action>pass</action>
             <quick>1</quick>
             <interface>opt2</interface>
@@ -428,7 +504,7 @@
           <rule>
             <enabled>1</enabled>
             <statetype>keep</statetype>
-            <sequence>100</sequence>
+            <sequence>110</sequence>
             <action>pass</action>
             <quick>1</quick>
             <interface>opt2</interface>
@@ -446,7 +522,7 @@
           <rule>
             <enabled>1</enabled>
             <statetype>keep</statetype>
-            <sequence>110</sequence>
+            <sequence>120</sequence>
             <action>pass</action>
             <quick>1</quick>
             <interface>opt2</interface>
@@ -464,7 +540,7 @@
           <rule>
             <enabled>1</enabled>
             <statetype>keep</statetype>
-            <sequence>120</sequence>
+            <sequence>130</sequence>
             <action>pass</action>
             <quick>1</quick>
             <interface>opt2</interface>
@@ -482,7 +558,7 @@
           <rule>
             <enabled>1</enabled>
             <statetype>keep</statetype>
-            <sequence>130</sequence>
+            <sequence>140</sequence>
             <action>pass</action>
             <quick>1</quick>
             <interface>opt2</interface>
@@ -497,6 +573,132 @@
             <log>0</log>
             <description>Users to Internet web</description>
           </rule>
+          <rule>
+            <enabled>1</enabled>
+            <statetype>keep</statetype>
+            <sequence>150</sequence>
+            <action>pass</action>
+            <quick>1</quick>
+            <interface>wireguard</interface>
+            <direction>in</direction>
+            <ipprotocol>inet</ipprotocol>
+            <protocol>TCP</protocol>
+            <source_net>HQ_NETS</source_net>
+            <source_not>0</source_not>
+            <destination_net>BR_DCS</destination_net>
+            <destination_not>0</destination_not>
+            <destination_port>PORTS_AD_TCP</destination_port>
+            <log>0</log>
+            <description>HQ to Branch DC - auth and replication (TCP)</description>
+          </rule>
+          <rule>
+            <enabled>1</enabled>
+            <statetype>keep</statetype>
+            <sequence>160</sequence>
+            <action>pass</action>
+            <quick>1</quick>
+            <interface>wireguard</interface>
+            <direction>in</direction>
+            <ipprotocol>inet</ipprotocol>
+            <protocol>UDP</protocol>
+            <source_net>HQ_NETS</source_net>
+            <source_not>0</source_not>
+            <destination_net>BR_DCS</destination_net>
+            <destination_not>0</destination_not>
+            <destination_port>PORTS_AD_UDP</destination_port>
+            <log>0</log>
+            <description>HQ to Branch DC - auth and replication (UDP)</description>
+          </rule>
+          <rule>
+            <enabled>1</enabled>
+            <statetype>keep</statetype>
+            <sequence>170</sequence>
+            <action>pass</action>
+            <quick>1</quick>
+            <interface>wireguard</interface>
+            <direction>in</direction>
+            <ipprotocol>inet</ipprotocol>
+            <protocol>ICMP</protocol>
+            <source_net>HQ_NETS</source_net>
+            <source_not>0</source_not>
+            <destination_net>BR_DCS</destination_net>
+            <destination_not>0</destination_not>
+            <destination_port />
+            <log>0</log>
+            <description>HQ ping Branch DC</description>
+          </rule>
+          <rule>
+            <enabled>1</enabled>
+            <statetype>keep</statetype>
+            <sequence>180</sequence>
+            <action>pass</action>
+            <quick>1</quick>
+            <interface>wireguard</interface>
+            <direction>in</direction>
+            <ipprotocol>inet</ipprotocol>
+            <protocol>TCP</protocol>
+            <source_net>HQ_MGMT_NET</source_net>
+            <source_not>0</source_not>
+            <destination_net>opt1</destination_net>
+            <destination_not>0</destination_not>
+            <destination_port>PORTS_MGMT</destination_port>
+            <log>0</log>
+            <description>HQ Mgmt to Branch servers</description>
+          </rule>
+          <rule>
+            <enabled>1</enabled>
+            <statetype>keep</statetype>
+            <sequence>190</sequence>
+            <action>pass</action>
+            <quick>1</quick>
+            <interface>wireguard</interface>
+            <direction>in</direction>
+            <ipprotocol>inet</ipprotocol>
+            <protocol>TCP</protocol>
+            <source_net>VPN_RA_POOL</source_net>
+            <source_not>0</source_not>
+            <destination_net>opt1</destination_net>
+            <destination_not>0</destination_not>
+            <destination_port>PORTS_MGMT</destination_port>
+            <log>0</log>
+            <description>VPN admins to Branch servers</description>
+          </rule>
+          <rule>
+            <enabled>1</enabled>
+            <statetype>keep</statetype>
+            <sequence>200</sequence>
+            <action>pass</action>
+            <quick>1</quick>
+            <interface>wireguard</interface>
+            <direction>in</direction>
+            <ipprotocol>inet</ipprotocol>
+            <protocol>ICMP</protocol>
+            <source_net>HQ_MGMT_NET</source_net>
+            <source_not>0</source_not>
+            <destination_net>BR_NETS</destination_net>
+            <destination_not>0</destination_not>
+            <destination_port />
+            <log>0</log>
+            <description>HQ Mgmt ping Branch</description>
+          </rule>
+          <rule>
+            <enabled>1</enabled>
+            <statetype>keep</statetype>
+            <sequence>210</sequence>
+            <action>pass</action>
+            <quick>1</quick>
+            <interface>wireguard</interface>
+            <direction>in</direction>
+            <ipprotocol>inet</ipprotocol>
+            <protocol>ICMP</protocol>
+            <source_net>VPN_RA_POOL</source_net>
+            <source_not>0</source_not>
+            <destination_net>BR_NETS</destination_net>
+            <destination_not>0</destination_not>
+            <destination_port />
+            <log>0</log>
+            <description>VPN admins ping Branch</description>
+          </rule>
         </rules>
         <snatrules />
         <npt />
@@ -509,6 +711,40 @@
         <templates />
       </Lvtemplate>
     </Firewall>
+    <wireguard>
+      <general version="0.0.1">
+        <enabled>1</enabled>
+      </general>
+      <client version="1.0.0">
+        <clients>
+          <client>
+            <enabled>1</enabled>
+            <name>hq-fw01</name>
+            <pubkey>wDA6D11mr8WISxxuPvyRwFILsbVQzAF8rG/Y8rXh+UA=</pubkey>
+            <psk>REDACTED</psk>
+            <tunneladdress>172.31.255.1/32,172.16.0.0/16,172.31.0.0/24</tunneladdress>
+            <serveraddress>10.10.10.11</serveraddress>
+            <serverport>51820</serverport>
+            <keepalive>25</keepalive>
+          </client>
+        </clients>
+      </client>
+      <server version="1.0.1">
+        <servers>
+          <server>
+            <enabled>1</enabled>
+            <name>s2s</name>
+            <instance>0</instance>
+            <pubkey>ld3myj7VFMf4yLRtqlgpFnSu3iYsuUsORBIJKJF+xig=</pubkey>
+            <privkey>REDACTED</privkey>
+            <port>51820</port>
+            <tunneladdress>172.31.255.2/30</tunneladdress>
+            <disableroutes>0</disableroutes>
+            <peers>UUID-REF x1</peers>
+          </server>
+        </servers>
+      </server>
+    </wireguard>
     <monit version="1.0.14" description="Monit settings">
       <general>
         <enabled>0</enabled>
@@ -838,17 +1074,6 @@
       <keyPairs />
       <preSharedKeys />
     </IPsec>
-    <wireguard>
-      <server version="1.0.1" description="WireGuard instance configuration">
-        <servers />
-      </server>
-      <general version="0.0.1" description="WireGuard configuration">
-        <enabled>0</enabled>
-      </general>
-      <client version="1.0.0" description="WireGuard peer configuration">
-        <clients />
-      </client>
-    </wireguard>
     <TrafficShaper version="1.0.3" description="Traffic shaper">
       <pipes />
       <queues />

@@ -84,3 +84,18 @@
   ansible.builtin.assert:
     that: "'Status: Enabled' in opnsense_pf.stdout"
     quiet: true
+
+# Site-to-site peers (the ones this side dials) must have completed a handshake: proves keys,
+# PSK, WAN rules and endpoints end to end - not just that the config was accepted.
+- name: Site-to-site WireGuard peers have a recent handshake
+  ansible.builtin.command: wg show all latest-handshakes
+  register: opnsense_wg_handshakes
+  changed_when: false
+  until: >-
+    opnsense_wg_peers | dict2items | selectattr('value.endpoint', 'defined')
+    | map(attribute='value.key') | map('extract', lab_secrets.wireguard['keys'], 'public')
+    | reject('in', opnsense_wg_handshakes.stdout_lines | select('search', '\s[1-9][0-9]+$') | join(' '))
+    | list | length == 0
+  retries: 12
+  delay: 5
+  when: opnsense_wg_instances | length > 0
