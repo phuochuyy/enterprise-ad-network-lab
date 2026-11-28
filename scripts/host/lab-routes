@@ -1,0 +1,11 @@
+#!/bin/sh
+# ifupdown hook: routes from the Proxmox host into the lab site supernets, via each site's
+# OPNsense WAN address (docs/architecture.md, "Admin access path"). The firewalls' WAN rules
+# only let this host reach management ports on the Mgmt and Servers VLANs.
+#
+# Install (root, once):  install -m 0755 scripts/host/lab-routes /etc/network/if-up.d/lab-routes
+#                        IFACE=vmbr1 /etc/network/if-up.d/lab-routes
+# ifupdown2 runs it on every `ifup`/`ifreload` of each interface; it only acts for vmbr1.
+[ "${IFACE}" = "vmbr1" ] || exit 0
+ip route replace 172.16.0.0/16 via 10.10.10.11 dev vmbr1 # HQ  (hq-fw01)
+ip route replace 172.17.0.0/16 via 10.10.10.12 dev vmbr1 # Branch (br-fw01)
