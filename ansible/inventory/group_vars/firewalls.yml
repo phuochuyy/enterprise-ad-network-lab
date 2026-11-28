@@ -1,0 +1,31 @@
+# OPNsense site firewalls - settings shared by both sites. Per-site VLANs, aliases and rules are
+# in host_vars/<host>.yml. Policy: deny by default; every allowed flow is a rule below or there.
+ansible_user: root
+ansible_ssh_private_key_file: "{{ lab_ssh_key }}"
+ansible_python_interpreter: /usr/local/bin/python3
+
+opnsense_domain: "{{ ad_domain }}"
+opnsense_timezone: Asia/Ho_Chi_Minh
+opnsense_wan_prefix: 24
+opnsense_wan_gateway: 10.10.10.1 # Proxmox host NAT
+
+# Aliases both sites use. type: host | network | port
+opnsense_aliases_common:
+  - { name: ADMIN_HOST, type: host, content: ["{{ admin_host }}"], description: Proxmox host - automation and admin access }
+  - { name: RFC1918, type: network, content: [10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16], description: Private address space }
+  - { name: HQ_NETS, type: network, content: [172.16.0.0/16], description: HQ supernet }
+  - { name: BR_NETS, type: network, content: [172.17.0.0/16], description: Branch supernet }
+  - { name: HQ_DCS, type: host, content: [172.16.20.11], description: hq-dc01 }
+  - { name: BR_DCS, type: host, content: [172.17.20.11], description: br-dc01 }
+  - { name: DCS, type: host, content: [172.16.20.11, 172.17.20.11], description: All domain controllers }
+  - { name: FILESERVERS, type: host, content: [172.16.20.21], description: hq-fs01 }
+  - { name: PORTS_WEB, type: port, content: ["80", "443"], description: HTTP/HTTPS egress }
+  - { name: PORTS_FW_ADMIN, type: port, content: ["22", "443"], description: Firewall SSH and web GUI }
+  - { name: PORTS_MGMT, type: port, content: ["22", "443", "3389", "5986"], description: SSH, HTTPS, RDP, WinRM HTTPS }
+  # AD DS client traffic: DNS, Kerberos, RPC endpoint mapper, LDAP(S), SMB, kpasswd, GC, ADWS, RPC dynamic
+  - name: PORTS_AD_TCP
+    type: port
+    content: ["53", "88", "135", "389", "445", "464", "636", "3268", "3269", "9389", "49152:65535"]
+    description: AD DS client ports (TCP)
+  - { name: PORTS_AD_UDP, type: port, content: ["53", "88", "123", "389", "464"], description: AD DS client ports (UDP) }
+  - { name: PORTS_INFRA_UDP, type: port, content: ["53", "123"], description: DNS and NTP on the firewall }

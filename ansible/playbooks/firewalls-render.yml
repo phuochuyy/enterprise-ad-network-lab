@@ -1,0 +1,19 @@
+# Render each firewall's config.xml into ansible/build/ without touching the firewalls.
+# Run: scripts/ansible.sh playbooks/firewalls-render.yml
+- name: Render OPNsense configs
+  hosts: firewalls
+  gather_facts: false
+  vars:
+    opnsense_render_dir: "{{ playbook_dir }}/../build"
+  tasks:
+    - name: Create the render directory
+      ansible.builtin.file:
+        path: "{{ opnsense_render_dir }}"
+        state: directory
+        mode: "0700"
+      delegate_to: localhost
+
+    - name: Render
+      ansible.builtin.include_role:
+        name: opnsense
+        tasks_from: render

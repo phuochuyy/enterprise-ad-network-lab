@@ -1,0 +1,13 @@
+# Secrets never live in the repo: they are read from user-only files on the control node.
+lab_secrets: "{{ lookup('ansible.builtin.file', '~/.config/lab/secrets.json') | from_json }}"
+lab_ssh_key: ~/.config/lab/id_ed25519
+
+pve_api_url: https://127.0.0.1:8006/api2/json
+pve_node: pve
+pve_token: "{{ lookup('ansible.builtin.file', '~/.config/pve/terraform-token.json') | from_json }}"
+pve_auth_header: "PVEAPIToken={{ pve_token['full-tokenid'] }}={{ pve_token.value }}"
+
+# docs/architecture.md - admin access path: automation runs on the Proxmox host (10.10.10.1).
+admin_host: 10.10.10.1
+upstream_dns: [1.1.1.1, 9.9.9.9]
+ad_domain: corp.huylab.internal

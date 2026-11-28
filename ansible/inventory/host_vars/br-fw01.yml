@@ -1,0 +1,25 @@
+# Branch firewall - docs/architecture.md. Same rule format as hq-fw01.yml.
+opnsense_wan_ip: 10.10.10.12
+
+opnsense_vlans:
+  - { tag: 120, name: SERVERS, ip: 172.17.20.1, prefix: 24 }
+  - { tag: 130, name: USERS, ip: 172.17.30.1, prefix: 24 }
+
+opnsense_aliases_site: []
+
+opnsense_rules:
+  - { iface: WAN, proto: TCP, src: ADMIN_HOST, dst: self, port: PORTS_FW_ADMIN, descr: Admin host to firewall SSH and GUI }
+  - { iface: WAN, proto: TCP, src: ADMIN_HOST, dst: "SERVERS:net", port: PORTS_MGMT, descr: Admin host to servers (Ansible) }
+  - { iface: WAN, proto: ICMP, src: ADMIN_HOST, dst: BR_NETS, descr: Admin host ping for diagnostics }
+
+  - { iface: SERVERS, proto: TCP/UDP, src: "SERVERS:net", dst: self, port: PORTS_INFRA_UDP, descr: Servers to firewall DNS and NTP }
+  - { iface: SERVERS, proto: TCP, src: "SERVERS:net", dst: RFC1918, dst_not: true, port: PORTS_WEB, descr: Servers to Internet web (updates) }
+  - { iface: SERVERS, proto: TCP, src: "SERVERS:net", dst: HQ_DCS, port: PORTS_AD_TCP, descr: AD replication to HQ DC (TCP) }
+  - { iface: SERVERS, proto: UDP, src: "SERVERS:net", dst: HQ_DCS, port: PORTS_AD_UDP, descr: AD replication to HQ DC (UDP) }
+  - { iface: SERVERS, proto: ICMP, src: "SERVERS:net", dst: any, descr: Servers ping }
+
+  - { iface: USERS, proto: TCP, src: "USERS:net", dst: DCS, port: PORTS_AD_TCP, descr: Users to domain controllers (TCP) }
+  - { iface: USERS, proto: UDP, src: "USERS:net", dst: DCS, port: PORTS_AD_UDP, descr: Users to domain controllers (UDP) }
+  - { iface: USERS, proto: TCP, src: "USERS:net", dst: FILESERVERS, port: "445", descr: Users to HQ file server SMB }
+  - { iface: USERS, proto: ICMP, src: "USERS:net", dst: DCS, descr: Users ping DCs }
+  - { iface: USERS, proto: TCP, src: "USERS:net", dst: RFC1918, dst_not: true, port: PORTS_WEB, descr: Users to Internet web }

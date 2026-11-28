@@ -48,3 +48,6 @@ terraform/modules/**/.terraform.lock.hcl
 # Packer build logs and manifests (may contain host details)
 packer/**/logs/
 packer/**/manifest.json
+
+# Rendered device configs (contain password hashes)
+ansible/build/

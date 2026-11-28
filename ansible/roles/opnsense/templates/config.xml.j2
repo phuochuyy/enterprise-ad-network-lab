@@ -1,0 +1,169 @@
+<?xml version="1.0"?>
+{#
+  Full OPNsense 26.7 config, rendered from inventory data (group_vars/firewalls.yml +
+  host_vars/<host>.yml). Only intent is written here; on boot OPNsense's model migrations fill in
+  every default field, so the running config is a superset of this file.
+
+  Interface keys: wan = vtnet1, lan = vtnet0 (the site trunk, no address - VLAN parent only),
+  opt1..optN = one per VLAN in opnsense_vlans order. Rules reference VLANs by name and are mapped here.
+#}
+{% set ifmap = {'WAN': 'wan'} %}
+{% for v in opnsense_vlans %}{% set _ = ifmap.update({v.name: 'opt' ~ loop.index}) %}{% endfor %}
+{% macro addr(value) -%}
+{%- if value == 'self' -%}(self)
+{%- elif value == 'any' -%}any
+{%- elif ':' in value -%}{{ ifmap[value.split(':')[0]] }}{{ 'ip' if value.split(':')[1] == 'ip' else '' }}
+{%- else -%}{{ value }}
+{%- endif -%}
+{%- endmacro %}
+<!-- Managed by Ansible (role opnsense). Local changes are overwritten on the next run. -->
+<opnsense>
+  <theme>opnsense</theme>
+  <system>
+    <optimization>normal</optimization>
+    <hostname>{{ inventory_hostname }}</hostname>
+    <domain>{{ opnsense_domain }}</domain>
+    <dnsallowoverride>0</dnsallowoverride>
+{% for dns in upstream_dns %}
+    <dnsserver>{{ dns }}</dnsserver>
+{% endfor %}
+    <group>
+      <name>admins</name>
+      <description>System Administrators</description>
+      <scope>system</scope>
+      <gid>1999</gid>
+      <member>0</member>
+      <priv>page-all</priv>
+    </group>
+    <user>
+      <name>root</name>
+      <descr>System Administrator</descr>
+      <scope>system</scope>
+      <groupname>admins</groupname>
+      <password>{{ opnsense_root_password_hash }}</password>
+      <uid>0</uid>
+      <shell>/bin/sh</shell>
+      <authorizedkeys>{{ opnsense_root_authorized_key | b64encode }}</authorizedkeys>
+    </user>
+    <timezone>{{ opnsense_timezone }}</timezone>
+    <timeservers>0.opnsense.pool.ntp.org 1.opnsense.pool.ntp.org</timeservers>
+    <webgui>
+      <protocol>https</protocol>
+    </webgui>
+    <disablenatreflection>yes</disablenatreflection>
+    <usevirtualterminal>1</usevirtualterminal>
+    <disableconsolemenu/>
+    <ipv6allow>0</ipv6allow>
+    <bogons>
+      <interval>monthly</interval>
+    </bogons>
+    <pf_share_forward>1</pf_share_forward>
+    <lb_use_sticky>1</lb_use_sticky>
+    <ssh>
+      <group>admins</group>
+      <enabled>enabled</enabled>
+      <permitrootlogin>1</permitrootlogin>
+    </ssh>
+  </system>
+  <interfaces>
+    <wan>
+      <enable>1</enable>
+      <if>vtnet1</if>
+      <descr>WAN</descr>
+      <ipaddr>{{ opnsense_wan_ip }}</ipaddr>
+      <subnet>{{ opnsense_wan_prefix }}</subnet>
+      <gateway>WAN_GW</gateway>
+    </wan>
+    <lan>
+      <enable>1</enable>
+      <if>vtnet0</if>
+      <descr>TRUNK</descr>
+    </lan>
+{% for v in opnsense_vlans %}
+    <opt{{ loop.index }}>
+      <enable>1</enable>
+      <if>vlan0{{ loop.index }}</if>
+      <descr>{{ v.name }}</descr>
+      <ipaddr>{{ v.ip }}</ipaddr>
+      <subnet>{{ v.prefix }}</subnet>
+    </opt{{ loop.index }}>
+{% endfor %}
+  </interfaces>
+  <vlans version="1.0.0" description="VLAN configuration">
+{% for v in opnsense_vlans %}
+    <vlan>
+      <if>vtnet0</if>
+      <tag>{{ v.tag }}</tag>
+      <pcp>0</pcp>
+      <proto/>
+      <descr>{{ v.name }}</descr>
+      <vlanif>vlan0{{ loop.index }}</vlanif>
+    </vlan>
+{% endfor %}
+  </vlans>
+  <gateways>
+    <gateway_item>
+      <interface>wan</interface>
+      <gateway>{{ opnsense_wan_gateway }}</gateway>
+      <name>WAN_GW</name>
+      <weight>1</weight>
+      <ipprotocol>inet</ipprotocol>
+      <descr>Proxmox host NAT</descr>
+      <defaultgw>1</defaultgw>
+    </gateway_item>
+  </gateways>
+  <unbound>
+    <enable>1</enable>
+  </unbound>
+  <nat>
+    <outbound>
+      <mode>automatic</mode>
+    </outbound>
+  </nat>
+  <filter>
+  </filter>
+  <OPNsense>
+    <Firewall>
+      <Alias version="1.0.1" description="Firewall aliases">
+        <aliases>
+{% for a in opnsense_aliases_common + opnsense_aliases_site %}
+          <alias>
+            <enabled>1</enabled>
+            <name>{{ a.name }}</name>
+            <type>{{ a.type }}</type>
+            <content>{{ a.content | join('\n') | e }}</content>
+            <description>{{ a.description | e }}</description>
+          </alias>
+{% endfor %}
+        </aliases>
+      </Alias>
+      <Filter version="1.0.5" description="Firewall rules (new)">
+        <rules>
+{% for r in opnsense_rules %}
+          <rule>
+            <enabled>1</enabled>
+            <statetype>keep</statetype>
+            <sequence>{{ loop.index * 10 }}</sequence>
+            <action>{{ r.action | default('pass') }}</action>
+            <quick>1</quick>
+            <interface>{{ ifmap[r.iface] }}</interface>
+            <direction>in</direction>
+            <ipprotocol>inet</ipprotocol>
+            <protocol>{{ r.proto }}</protocol>
+            <source_net>{{ addr(r.src) }}</source_net>
+            <source_not>0</source_not>
+            <destination_net>{{ addr(r.dst) }}</destination_net>
+            <destination_not>{{ 1 if r.dst_not | default(false) else 0 }}</destination_not>
+            <destination_port>{{ r.port | default('') }}</destination_port>
+            <log>{{ 1 if r.log | default(false) else 0 }}</log>
+            <description>{{ r.descr | e }}</description>
+          </rule>
+{% endfor %}
+        </rules>
+        <snatrules/>
+        <npt/>
+        <onetoone/>
+      </Filter>
+    </Firewall>
+  </OPNsense>
+</opnsense>
