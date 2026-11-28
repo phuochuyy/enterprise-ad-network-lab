@@ -45,3 +45,11 @@ repos:
     hooks:
       - id: shellcheck
         args: [-x] # follow sourced helpers such as scripts/media/_common.sh
+
+  - repo: local
+    hooks:
+      - id: check-unattend
+        name: unattend answer files within Windows Setup limits
+        entry: python3 scripts/lint/check-unattend.py
+        language: system
+        files: ^packer/windows/answer/.*\.xml(\.pkrtpl)?$
