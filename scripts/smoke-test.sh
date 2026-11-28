@@ -55,7 +55,7 @@ ps = r"""
 $ip = (Get-NetIPAddress -AddressFamily IPv4 | Where-Object { $_.IPAddress -notlike '127.*' -and $_.IPAddress -notlike '169.254.*' }).IPAddress -join ','
 $svc = Get-Item WSMan:\localhost\Service\AllowUnencrypted, WSMan:\localhost\Service\Auth\Basic
 "{0}|{1}|{2}|{3}|{4}" -f $env:COMPUTERNAME, $ip, $svc[0].Value, $svc[1].Value,
-  (Get-ItemProperty 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion').ProductName
+  (Get-CimInstance Win32_OperatingSystem).Caption  # ProductName still says "Windows 10" on Windows 11
 """
 r = s.run_ps(ps)
 if r.status_code != 0:
