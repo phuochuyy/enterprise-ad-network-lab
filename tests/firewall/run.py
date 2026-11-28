@@ -10,67 +10,23 @@ import base64
 import datetime
 import json
 import os
-import ssl
 import subprocess
 import sys
 import time
-import urllib.parse
-import urllib.request
 
 import yaml  # PyYAML, from the ansible-core venv
 
-API = "https://127.0.0.1:8006/api2/json/nodes/pve/qemu"
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "lib"))
+from pve import agent_exec, api, wait_ready  # noqa: E402
+
 HERE = os.path.dirname(os.path.abspath(__file__))
 REPO = os.path.dirname(os.path.dirname(HERE))
-TOKEN_FILE = os.path.expanduser(os.environ.get("TOKEN_FILE", "~/.config/pve/terraform-token.json"))
-CTX = ssl._create_unverified_context()  # loopback to the host's self-signed API certificate
-
-
-def api(method: str, path: str, data: list[tuple[str, str]] | None = None) -> dict:
-    with open(TOKEN_FILE) as fh:
-        tok = json.load(fh)
-    req = urllib.request.Request(
-        f"{API}/{path}",
-        method=method,
-        data=urllib.parse.urlencode(data).encode() if data is not None else None,
-        headers={"Authorization": f"PVEAPIToken={tok['full-tokenid']}={tok['value']}"},
-    )
-    try:
-        with urllib.request.urlopen(req, context=CTX, timeout=30) as resp:
-            return json.load(resp)
-    except urllib.error.HTTPError as exc:
-        return {"data": None, "message": exc.read().decode(errors="replace")}
-
-
-def agent_exec(vmid: int, argv: list[str], timeout: float = 60) -> tuple[int, str]:
-    r = api("POST", f"{vmid}/agent/exec", [("command", a) for a in argv])
-    if not r.get("data"):
-        raise RuntimeError(f"exec on {vmid} failed: {r.get('message')}")
-    pid = r["data"]["pid"]
-    deadline = time.time() + timeout
-    while time.time() < deadline:
-        st = api("GET", f"{vmid}/agent/exec-status?pid={pid}").get("data") or {}
-        if st.get("exited"):
-            return st.get("exitcode", 0), st.get("out-data", "")
-        time.sleep(0.5)
-    raise RuntimeError(f"exec on {vmid} timed out: {argv}")
-
-
-def wait_ready(name: str, vmid: int) -> None:
-    deadline = time.time() + 600
-    while time.time() < deadline:
-        if api("POST", f"{vmid}/agent/ping").get("data") is not None:
-            break
-        time.sleep(5)
-    else:
-        raise RuntimeError(f"{name}: guest agent never answered")
-    agent_exec(vmid, ["cloud-init", "status", "--wait"], timeout=600)
 
 
 def install_probe(vmid: int) -> None:
     with open(os.path.join(HERE, "probe.py"), "rb") as fh:
         content = base64.b64encode(fh.read()).decode()
-    r = api("POST", f"{vmid}/agent/file-write",
+    r = api("POST", f"qemu/{vmid}/agent/file-write",
             [("file", "/usr/local/bin/fwprobe"), ("content", content), ("encode", "0")])
     if r.get("message"):
         raise RuntimeError(f"upload to {vmid} failed: {r['message']}")
@@ -96,7 +52,7 @@ def bring_up_vpn(name: str, p: dict) -> None:
         raise SystemExit(f"{name}: installing wireguard-tools failed: {out[-500:]}")
     with open(os.path.join(REPO, p["vpn"]["config"]), "rb") as fh:
         content = base64.b64encode(fh.read()).decode()
-    api("POST", f"{p['vm_id']}/agent/file-write",
+    api("POST", f"qemu/{p['vm_id']}/agent/file-write",
         [("file", "/etc/wireguard/wg0.conf"), ("content", content), ("encode", "0")])
     rc, out = agent_exec(p["vm_id"], ["sh", "-c", "chmod 600 /etc/wireguard/wg0.conf && (wg-quick down wg0 >/dev/null 2>&1; wg-quick up wg0 2>&1)"])
     if rc != 0:
