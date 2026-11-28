@@ -1,0 +1,21 @@
+# File services (issue #9): domain join, AGDLP identities on the forest root DC, shares and the
+# DFS namespace on hq-fs01. Run: scripts/ansible.sh playbooks/file-server.yml
+- name: Join the member servers to the domain
+  hosts: member_servers
+  gather_facts: false
+  roles:
+    - domain_member
+
+- name: AGDLP groups and test users
+  hosts: hq-dc01
+  gather_facts: false
+  become: true
+  roles:
+    - ad_identities
+
+- name: File server and DFS namespace
+  hosts: file_servers
+  gather_facts: false
+  become: true # DFS namespace objects live in AD (double hop)
+  roles:
+    - file_server

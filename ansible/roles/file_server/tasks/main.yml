@@ -1,0 +1,145 @@
+# File server + DFS namespace server (issue #9): shares on a dedicated data volume, NTFS rights
+# granted only to DL groups (AGDLP), access-based enumeration on shares and namespace.
+# Server Core has no RSAT-DFS-Mgmt-Con (GUI); the DFSN PowerShell module comes with the role's
+# management tools.
+- name: File server, DFS Namespaces and their management tools
+  ansible.windows.win_feature:
+    name: [FS-FileServer, FS-DFS-Namespace]
+    include_management_tools: true
+
+# D: is the data volume. The cloud-init config drive (a CD) takes D: on first boot: it moves to
+# Z: - cloudbase-init finds it by its label (config-2), not by letter.
+- name: "Data volume D: on the second disk"
+  ansible.windows.win_powershell:
+    script: |
+      $ErrorActionPreference = 'Stop'
+      $Ansible.Changed = $false
+      if (-not (Get-Volume -DriveLetter D -ErrorAction SilentlyContinue | Where-Object FileSystemLabel -eq 'Data')) {
+          Get-CimInstance Win32_Volume -Filter "DriveType = 5 AND DriveLetter = 'D:'" |
+              Set-CimInstance -Property @{ DriveLetter = 'Z:' }
+          # The data disk: not the boot disk, no partition except Microsoft Reserved. A RAW disk is
+          # initialized first; a GPT one is left from an earlier, interrupted run.
+          $disk = Get-Disk | Where-Object { -not $_.IsBoot -and -not $_.IsSystem } | Where-Object {
+              $_.PartitionStyle -eq 'RAW' -or
+              -not (Get-Partition -DiskNumber $_.Number -ErrorAction SilentlyContinue | Where-Object Type -ne 'Reserved')
+          } | Select-Object -First 1
+          if (-not $disk) { throw 'no empty data disk found' }
+          if ($disk.PartitionStyle -eq 'RAW') { Initialize-Disk -Number $disk.Number -PartitionStyle GPT }
+          New-Partition -DiskNumber $disk.Number -UseMaximumSize -DriveLetter D |
+              Format-Volume -FileSystem NTFS -NewFileSystemLabel Data -Confirm:$false | Out-Null
+          $Ansible.Changed = $true
+      }
+
+- name: Share folders
+  ansible.windows.win_file:
+    path: "D:\\Shares\\{{ item.name }}"
+    state: directory
+  loop: "{{ fs_shares }}"
+  loop_control:
+    label: "{{ item.name }}"
+
+# Explicit ACEs first, then cut inheritance (keeping only these): no "Users" read on anything.
+- name: NTFS - administrators and SYSTEM
+  ansible.windows.win_acl:
+    path: "D:\\Shares\\{{ item.0.name }}"
+    user: "{{ item.1 }}"
+    rights: FullControl
+    type: allow
+    inherit: ContainerInherit, ObjectInherit
+    propagation: None
+  loop: "{{ fs_shares | product(['SYSTEM', 'BUILTIN\\Administrators']) | list }}"
+  loop_control:
+    label: "{{ item.0.name }}: {{ item.1 }}"
+
+- name: NTFS - DL groups (Modify / ReadAndExecute)
+  ansible.windows.win_acl:
+    path: "D:\\Shares\\{{ item.0.name }}"
+    user: "{{ ad_netbios }}\\DL-FS-{{ item.0.name }}-{{ item.1 | upper }}"
+    rights: "{{ 'Modify' if item.1 == 'rw' else 'ReadAndExecute' }}"
+    type: allow
+    inherit: ContainerInherit, ObjectInherit
+    propagation: None
+  loop: "{{ fs_shares | product(['rw', 'ro']) | list }}"
+  loop_control:
+    label: "{{ item.0.name }}: DL-FS-{{ item.0.name }}-{{ item.1 | upper }}"
+
+- name: NTFS - no inherited permissions
+  ansible.windows.win_acl_inheritance:
+    path: "D:\\Shares\\{{ item.name }}"
+    state: absent
+    reorganize: false # drop the inherited ACEs (BUILTIN\Users read from D:\) instead of copying them
+  loop: "{{ fs_shares }}"
+  loop_control:
+    label: "{{ item.name }}"
+
+# Share level: Authenticated Users Change, Administrators Full - NTFS decides. ABE hides folders
+# a user cannot read.
+- name: SMB shares (access-based enumeration)
+  ansible.windows.win_share:
+    name: "{{ item.name }}"
+    path: "D:\\Shares\\{{ item.name }}"
+    description: "{{ item.description }}"
+    full: BUILTIN\Administrators
+    change: NT AUTHORITY\Authenticated Users
+    list: false
+    folder_enum_mode: AccessBased
+    caching_mode: None
+  loop: "{{ fs_shares }}"
+  loop_control:
+    label: "{{ item.name }}"
+
+- name: DFS namespace root folder
+  ansible.windows.win_file:
+    path: "C:\\DFSRoots\\{{ fs_namespace }}"
+    state: directory
+
+- name: DFS namespace root share
+  ansible.windows.win_share:
+    name: "{{ fs_namespace }}"
+    path: "C:\\DFSRoots\\{{ fs_namespace }}"
+    description: "DFS namespace root \\\\{{ ad_domain }}\\{{ fs_namespace }}"
+    read: Everyone
+    full: BUILTIN\Administrators
+
+# Domain-based (V2) namespace with ABE; each folder gets explicit DFS permissions for its DL
+# groups, so a user listing \\domain\Shares only sees the folders he can open.
+- name: DFS namespace and folders
+  ansible.windows.win_powershell:
+    parameters:
+      Domain: "{{ ad_domain }}"
+      Netbios: "{{ ad_netbios }}"
+      Namespace: "{{ fs_namespace }}"
+      SharesJson: "{{ fs_shares | map(attribute='name') | list | to_json }}"
+    script: |
+      param([string]$Domain, [string]$Netbios, [string]$Namespace, [string]$SharesJson)
+      $ErrorActionPreference = 'Stop'
+      $Ansible.Changed = $false
+      $server = "$env:COMPUTERNAME.$Domain".ToLower()
+      $root = "\\$Domain\$Namespace"
+      if (-not (Get-DfsnRoot -Path $root -ErrorAction SilentlyContinue)) {
+          New-DfsnRoot -Path $root -TargetPath "\\$server\$Namespace" -Type DomainV2 -EnableAccessBasedEnumeration $true | Out-Null
+          $Ansible.Changed = $true
+      }
+      foreach ($share in ($SharesJson | ConvertFrom-Json | ForEach-Object { $_ })) {
+          $link = "$root\$share"
+          if (-not (Get-DfsnFolder -Path $link -ErrorAction SilentlyContinue)) {
+              New-DfsnFolder -Path $link -TargetPath "\\$server\$share" | Out-Null
+              $Ansible.Changed = $true
+          }
+          $want = @("$Netbios\DL-FS-$share-RW", "$Netbios\DL-FS-$share-RO", 'BUILTIN\Administrators')
+          $have = @(Get-DfsnAccess -Path $link -ErrorAction SilentlyContinue | ForEach-Object { $_.AccountName })
+          foreach ($acct in $want) {
+              if ($acct -notin $have) { Grant-DfsnAccess -Path $link -AccountName $acct | Out-Null; $Ansible.Changed = $true }
+          }
+      }
+
+- name: Every share is reachable through the namespace
+  ansible.windows.win_powershell:
+    parameters:
+      Root: "\\\\{{ ad_domain }}\\{{ fs_namespace }}"
+      SharesJson: "{{ fs_shares | map(attribute='name') | list | to_json }}"
+    script: |
+      param([string]$Root, [string]$SharesJson)
+      $Ansible.Changed = $false
+      $missing = @($SharesJson | ConvertFrom-Json | ForEach-Object { $_ } | Where-Object { -not (Test-Path "$Root\$_") })
+      if ($missing) { throw "not reachable via the namespace: $($missing -join ', ')" }
