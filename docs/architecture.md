@@ -119,6 +119,17 @@ pitfalls in its README). The last run's result: [`docs/ad/health-report.md`](ad/
 | Resolver order | br-dc01, self | hq-dc01, self |
 | Time | hq-fw01 NTP (PDC) | domain hierarchy |
 
+### DHCP
+
+Both DCs serve both Users scopes as a load-balance failover pair (`HQ-BRANCH-DHCP`, role
+`ansible/roles/dhcp`); each firewall relays its Users VLAN to both. Either DC can be down:
+[`docs/dhcp/failover-test-report.md`](dhcp/failover-test-report.md).
+
+| Scope | Range | Router | DNS (option 6) |
+| --- | --- | --- | --- |
+| HQ-Users 172.16.30.0/24 | .100-.199 | 172.16.30.1 | hq-dc01, br-dc01 |
+| Branch-Users 172.17.30.0/24 | .100-.199 | 172.17.30.1 | br-dc01, hq-dc01 |
+
 ## VPN (ADR-0005)
 
 | Tunnel | Where | Port | Addresses | Carries |
