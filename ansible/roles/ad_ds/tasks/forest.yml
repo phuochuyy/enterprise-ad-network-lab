@@ -1,0 +1,26 @@
+# First DC: create the forest (no-op once the domain exists).
+- name: Create the forest {{ ad_domain }}
+  microsoft.ad.domain:
+    dns_domain_name: "{{ ad_domain }}"
+    domain_netbios_name: "{{ ad_netbios }}"
+    safe_mode_password: "{{ ad_dsrm_password }}"
+    install_dns: true
+    reboot: true
+
+- name: SYSVOL
+  ansible.builtin.include_tasks: sysvol.yml
+
+# Read-only wait, cheap when AD is already up - so it runs every time (also after a manual
+# reboot): after promotion, AD Web Services needs a moment before the AD cmdlets can use it.
+- name: Wait until the DC locator finds this DC through AD Web Services
+  ansible.windows.win_powershell:
+    script: |
+      $Ansible.Changed = $false
+      $deadline = (Get-Date).AddMinutes(10)
+      while ($true) {
+          try { Get-ADReplicationSite -Filter * -ErrorAction Stop | Out-Null; break }
+          catch {
+              if ((Get-Date) -gt $deadline) { throw "AD DS not discoverable after 10 minutes: $_" }
+              Start-Sleep -Seconds 10
+          }
+      }

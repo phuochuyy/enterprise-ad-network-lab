@@ -1,0 +1,5 @@
+# Third-party collections are installed into the project (requirements.yml); lint only our code.
+exclude_paths:
+  - collections/
+  - build/
+  - .ansible/

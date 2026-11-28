@@ -1,0 +1,12 @@
+# Windows hosts: WinRM over HTTPS (5986) with NTLM - the only way the templates allow (Basic and
+# plain HTTP are off; scripts/smoke-test.sh checks it). The certificate is the per-host
+# self-signed one issued on first boot; validation can be turned on once AD CS exists.
+ansible_connection: winrm
+ansible_port: 5986
+ansible_winrm_transport: ntlm
+ansible_winrm_server_cert_validation: ignore
+ansible_winrm_operation_timeout_sec: 120
+ansible_winrm_read_timeout_sec: 150
+# Local Administrator from the template; on the DCs it becomes the domain's Administrator.
+ansible_user: Administrator
+ansible_password: "{{ lab_secrets.admin_password }}"

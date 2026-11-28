@@ -1,0 +1,46 @@
+# Sites and Services, replicated forest-wide: run once, on the forest root DC.
+- name: Sites, subnets and the site link
+  ansible.windows.win_powershell:
+    parameters:
+      SitesJson: "{{ ad_sites | to_json }}"
+      LinkJson: "{{ ad_site_link | to_json }}"
+    script: |
+      param([string]$SitesJson, [string]$LinkJson)
+      $ErrorActionPreference = 'Stop'
+      $sites = $SitesJson | ConvertFrom-Json
+      $link = $LinkJson | ConvertFrom-Json
+      $Ansible.Changed = $false
+      # The forest starts with Default-First-Site-Name: it becomes the first site.
+      $default = Get-ADReplicationSite -Filter "Name -eq 'Default-First-Site-Name'"
+      if ($default -and -not (Get-ADReplicationSite -Filter "Name -eq '$($sites[0].name)'")) {
+          Rename-ADObject -Identity $default.DistinguishedName -NewName $sites[0].name
+          $Ansible.Changed = $true
+      }
+      foreach ($s in $sites) {
+          if (-not (Get-ADReplicationSite -Filter "Name -eq '$($s.name)'")) {
+              New-ADReplicationSite -Name $s.name -Description $s.description
+              $Ansible.Changed = $true
+          }
+          foreach ($net in $s.subnets) {
+              $sub = Get-ADReplicationSubnet -Filter "Name -eq '$net'"
+              if (-not $sub) {
+                  New-ADReplicationSubnet -Name $net -Site $s.name
+                  $Ansible.Changed = $true
+              } elseif ($sub.Site -notlike "CN=$($s.name),*") {
+                  Set-ADReplicationSubnet -Identity $net -Site $s.name
+                  $Ansible.Changed = $true
+              }
+          }
+      }
+      $existing = Get-ADReplicationSiteLink -Filter "Name -eq '$($link.name)'"
+      if (-not $existing) {
+          New-ADReplicationSiteLink -Name $link.name -SitesIncluded $link.sites -Cost $link.cost `
+              -ReplicationFrequencyInMinutes $link.replication_minutes -InterSiteTransportProtocol IP
+          $Ansible.Changed = $true
+      }
+      # DEFAULTIPSITELINK would otherwise keep linking the renamed first site.
+      $legacy = Get-ADReplicationSiteLink -Filter "Name -eq 'DEFAULTIPSITELINK'"
+      if ($legacy) {
+          Remove-ADReplicationSiteLink -Identity $legacy.DistinguishedName -Confirm:$false
+          $Ansible.Changed = $true
+      }

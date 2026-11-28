@@ -10,8 +10,9 @@
 # Every TCP/UDP port a case targets is listened on by the target probe, so a "deny" can only
 # come from the firewall, not from a closed port.
 #
-# The server probes take the domain controllers' addresses (172.16.20.11, 172.17.20.11) because
-# the AD rules target them. Run this before #7 deploys the real DCs, or point it at them then.
+# `targets` are real hosts (the domain controllers, #7), tested with their real services. For
+# them "deny" is the end-to-end property - nothing answers - whichever layer drops it (pf, or
+# Windows Firewall behind it); WinRM 5986 is open on the DCs, so a pf leak there would show.
 
 template_vm_id: 9004
 
@@ -19,15 +20,19 @@ template_vm_id: 9004
 
 probes:
   hq-mgmt: { name: hq-prb01, vm_id: 951, bridge: vmbr10, vlan: 10, ip: 172.16.10.50, gateway: 172.16.10.1 }
-  hq-srv: { name: hq-prb02, vm_id: 952, bridge: vmbr10, vlan: 20, ip: 172.16.20.11, gateway: 172.16.20.1 }
+  hq-srv: { name: hq-prb02, vm_id: 952, bridge: vmbr10, vlan: 20, ip: 172.16.20.12, gateway: 172.16.20.1 }
   hq-usr: { name: hq-prb03, vm_id: 953, bridge: vmbr10, vlan: 30, ip: 172.16.30.150, gateway: 172.16.30.1 }
   hq-dmz: { name: hq-prb04, vm_id: 954, bridge: vmbr10, vlan: 40, ip: 172.16.40.50, gateway: 172.16.40.1 }
-  br-srv: { name: br-prb01, vm_id: 955, bridge: vmbr20, vlan: 120, ip: 172.17.20.11, gateway: 172.17.20.1 }
+  br-srv: { name: br-prb01, vm_id: 955, bridge: vmbr20, vlan: 120, ip: 172.17.20.12, gateway: 172.17.20.1 }
   br-usr: { name: br-prb02, vm_id: 956, bridge: vmbr20, vlan: 130, ip: 172.17.30.150, gateway: 172.17.30.1 }
   # Outside the sites, on the simulated WAN: an admin laptop on the remote-access VPN (#6), and
   # before the tunnel is up, a stranger on the WAN. Internet DNS for apt (wireguard-tools).
   rw: { name: hq-prb05, vm_id: 957, bridge: vmbr1, ip: 10.10.10.70, gateway: 10.10.10.1, dns: 1.1.1.1,
         vpn: { config: ansible/build/wireguard/rw-test.conf } }
+
+targets:
+  hq-dc: 172.16.20.11 # hq-dc01
+  br-dc: 172.17.20.11 # br-dc01
 
 listen:
   hq-mgmt: { tcp: [22, 443] }
@@ -41,11 +46,12 @@ listen:
 # Targets: a probe name, "fw" (the probe's own gateway on the firewall) or an IP address.
 cases:
   # --- HQ Users -> domain controller: only the AD DS client ports ----------------------------
-  - { from: hq-usr, to: hq-srv, proto: tcp, port: 445, expect: allow, why: Users to DCs - SMB (SYSVOL, GPO) }
-  - { from: hq-usr, to: hq-srv, proto: tcp, port: 389, expect: allow, why: Users to DCs - LDAP }
-  - { from: hq-usr, to: hq-srv, proto: tcp, port: 88, expect: allow, why: Users to DCs - Kerberos }
-  - { from: hq-usr, to: hq-srv, proto: udp, port: 53, expect: allow, why: Users to DCs - DNS }
-  - { from: hq-usr, to: hq-srv, proto: icmp, expect: allow, why: Users ping DCs }
+  - { from: hq-usr, to: hq-dc, proto: tcp, port: 445, expect: allow, why: Users to DCs - SMB (SYSVOL, GPO) }
+  - { from: hq-usr, to: hq-dc, proto: tcp, port: 389, expect: allow, why: Users to DCs - LDAP }
+  - { from: hq-usr, to: hq-dc, proto: tcp, port: 88, expect: allow, why: Users to DCs - Kerberos }
+  - { from: hq-usr, to: hq-dc, proto: udp, port: 53, expect: allow, why: Users to DCs - DNS }
+  - { from: hq-usr, to: hq-dc, proto: icmp, expect: allow, why: Users ping DCs }
+  - { from: hq-usr, to: hq-dc, proto: tcp, port: 5986, expect: deny, why: Users cannot reach WinRM on the DC (open on the DC itself) }
   - { from: hq-usr, to: hq-srv, proto: tcp, port: 22, expect: deny, why: Users cannot SSH to servers }
   - { from: hq-usr, to: hq-srv, proto: tcp, port: 3389, expect: deny, why: Users cannot RDP to servers }
   - { from: hq-usr, to: hq-srv, proto: tcp, port: 5986, expect: deny, why: Users cannot reach WinRM }
@@ -74,25 +80,25 @@ cases:
   - { from: hq-dmz, to: hq-mgmt, proto: tcp, port: 22, expect: deny, why: DMZ isolated from Mgmt }
   - { from: hq-dmz, to: 1.1.1.1, proto: tcp, port: 443, expect: allow, why: DMZ reaches the web }
   # --- Branch --------------------------------------------------------------------------------
-  - { from: br-usr, to: br-srv, proto: tcp, port: 445, expect: allow, why: Branch users to their DC - SMB }
-  - { from: br-usr, to: br-srv, proto: udp, port: 53, expect: allow, why: Branch users to their DC - DNS }
+  - { from: br-usr, to: br-dc, proto: tcp, port: 445, expect: allow, why: Branch users to their DC - SMB }
+  - { from: br-usr, to: br-dc, proto: udp, port: 53, expect: allow, why: Branch users to their DC - DNS }
   - { from: br-usr, to: br-srv, proto: tcp, port: 22, expect: deny, why: Branch users cannot SSH to servers }
   - { from: br-usr, to: br-srv, proto: tcp, port: 3389, expect: deny, why: Branch users cannot RDP to servers }
   - { from: br-usr, to: 1.1.1.1, proto: tcp, port: 443, expect: allow, why: Branch users browse the web }
   - { from: br-srv, to: br-usr, proto: tcp, port: 22, expect: deny, why: Branch servers do not initiate to clients }
   - { from: br-srv, to: fw, proto: udp, port: 53, expect: allow, why: Branch servers resolve through the firewall }
   # --- Cross-site over the WireGuard site-to-site tunnel (#6) ----------------------------------
-  - { from: br-usr, to: hq-srv, proto: path, port: 445, expect: via 172.31.255.1, why: Branch to HQ goes through the tunnel }
-  - { from: br-usr, to: hq-srv, proto: tcp, port: 445, expect: allow, why: Branch users to HQ DC - SMB }
-  - { from: br-usr, to: hq-srv, proto: tcp, port: 389, expect: allow, why: Branch users to HQ DC - LDAP }
-  - { from: br-usr, to: hq-srv, proto: udp, port: 53, expect: allow, why: Branch users to HQ DC - DNS }
+  - { from: br-usr, to: hq-dc, proto: path, port: 445, expect: via 172.31.255.1, why: Branch to HQ goes through the tunnel }
+  - { from: br-usr, to: hq-dc, proto: tcp, port: 445, expect: allow, why: Branch users to HQ DC - SMB }
+  - { from: br-usr, to: hq-dc, proto: tcp, port: 389, expect: allow, why: Branch users to HQ DC - LDAP }
+  - { from: br-usr, to: hq-dc, proto: udp, port: 53, expect: allow, why: Branch users to HQ DC - DNS }
   - { from: br-usr, to: hq-srv, proto: tcp, port: 22, expect: deny, why: Branch users cannot SSH to HQ servers }
   - { from: br-usr, to: hq-mgmt, proto: tcp, port: 22, expect: deny, why: Branch users cannot reach HQ Mgmt }
   - { from: br-usr, to: hq-usr, proto: tcp, port: 3389, expect: deny, why: No client-to-client across sites }
-  - { from: hq-usr, to: br-srv, proto: tcp, port: 445, expect: allow, why: HQ users can authenticate at the Branch DC }
+  - { from: hq-usr, to: br-dc, proto: tcp, port: 445, expect: allow, why: HQ users can authenticate at the Branch DC }
   - { from: hq-usr, to: br-usr, proto: tcp, port: 22, expect: deny, why: No client-to-client across sites }
-  - { from: hq-srv, to: br-srv, proto: tcp, port: 389, expect: allow, why: AD replication HQ -> Branch }
-  - { from: br-srv, to: hq-srv, proto: tcp, port: 88, expect: allow, why: AD replication Branch -> HQ }
+  - { from: hq-srv, to: br-dc, proto: tcp, port: 389, expect: allow, why: HQ servers to the Branch DC (auth, replication) }
+  - { from: br-srv, to: hq-dc, proto: tcp, port: 88, expect: allow, why: Branch servers to the HQ DC (auth, replication) }
   - { from: hq-mgmt, to: br-srv, proto: tcp, port: 22, expect: allow, why: HQ admins manage Branch servers }
   - { from: br-srv, to: hq-mgmt, proto: tcp, port: 22, expect: deny, why: Branch cannot reach HQ Mgmt }
   - { from: hq-dmz, to: br-srv, proto: tcp, port: 445, expect: deny, why: DMZ cannot reach the Branch }

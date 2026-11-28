@@ -1,0 +1,63 @@
+# AD DS (issue #7): forest on hq-dc01, br-dc01 as a second DC in the Branch site, Sites and
+# Services, DNS, time, OU design, then health gates and docs/ad/health-report.md.
+# Run: scripts/ansible.sh playbooks/ad.yml
+- name: Forest root domain controller
+  hosts: hq-dc01 # = ad_forest_root_dc
+  gather_facts: false
+  become: true # see group_vars/domain_controllers.yml (double hop)
+  tasks:
+    - name: Forest
+      ansible.builtin.include_role:
+        name: ad_ds
+        tasks_from: forest
+
+    - name: Sites and Services (before other DCs, so they land in their own site)
+      ansible.builtin.include_role:
+        name: ad_ds
+        tasks_from: sites
+
+- name: Additional domain controllers
+  hosts: domain_controllers:!hq-dc01
+  gather_facts: false
+  serial: 1
+  become: true
+  tasks:
+    - name: Promote
+      ansible.builtin.include_role:
+        name: ad_ds
+        tasks_from: replica
+
+- name: Every domain controller
+  hosts: domain_controllers
+  gather_facts: false
+  become: true
+  tasks:
+    - name: DNS
+      ansible.builtin.include_role:
+        name: ad_ds
+        tasks_from: dns
+
+    - name: Time
+      ansible.builtin.include_role:
+        name: ad_ds
+        tasks_from: time
+
+    - name: OUs
+      ansible.builtin.include_role:
+        name: ad_ds
+        tasks_from: ous
+
+    - name: Health gates
+      ansible.builtin.include_role:
+        name: ad_ds
+        tasks_from: verify
+
+- name: Health report
+  hosts: localhost
+  gather_facts: false
+  tasks:
+    - name: Write docs/ad/health-report.md
+      ansible.builtin.template:
+        src: templates/ad-health-report.md.j2
+        dest: "{{ playbook_dir }}/../../docs/ad/health-report.md"
+        mode: "0644"

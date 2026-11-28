@@ -1,0 +1,46 @@
+# AD DS forest (issue #7, ADR-0003). hq-dc01 creates the forest; br-dc01 joins as a second DC
+# in its own site. Every value below is applied idempotently by playbooks/ad.yml.
+# ad_domain comes from group_vars/all.yml
+ad_netbios: CORP
+ad_domain_dn: "{{ ad_domain.split('.') | map('regex_replace', '^', 'DC=') | join(',') }}"
+ad_forest_root_dc: hq-dc01
+ad_dsrm_password: "{{ lab_secrets.ad_dsrm_password }}"
+
+# Sites and Services: one site per office, subnets = site supernets, one site link.
+ad_sites:
+  - { name: HQ, subnets: [172.16.0.0/16], description: Head office }
+  - { name: BRANCH, subnets: [172.17.0.0/16], description: Branch office }
+ad_site_link: { name: HQ-BRANCH, sites: [HQ, BRANCH], cost: 100, replication_minutes: 15 }
+
+# DNS: forwarders = the DC's own site firewall (Unbound); AD-integrated reverse zones per site.
+ad_dns_forwarder: "{{ ansible_host | regex_replace('\\.\\d+$', '.1') }}"
+ad_reverse_zones: [16.172.in-addr.arpa, 17.172.in-addr.arpa]
+
+# The PDC emulator is the forest time source; it follows the HQ firewall's NTP.
+ad_pdc_ntp_peer: 172.16.20.1
+
+# OU design: tiered admin, per-site users/workstations/servers, AGDLP groups.
+ad_ou_root: CORP
+ad_ous:
+  - { name: Admin, path: "OU=CORP", description: Tier-0 admin accounts and groups }
+  - { name: HQ, path: "OU=CORP", description: Head office }
+  - { name: Users, path: "OU=HQ,OU=CORP", description: HQ user accounts }
+  - { name: Workstations, path: "OU=HQ,OU=CORP", description: HQ clients }
+  - { name: Servers, path: "OU=HQ,OU=CORP", description: HQ member servers }
+  - { name: Branch, path: "OU=CORP", description: Branch office }
+  - { name: Users, path: "OU=Branch,OU=CORP", description: Branch user accounts }
+  - { name: Workstations, path: "OU=Branch,OU=CORP", description: Branch clients }
+  - { name: Servers, path: "OU=Branch,OU=CORP", description: Branch member servers }
+  - { name: Groups, path: "OU=CORP", description: AGDLP groups }
+  - { name: Roles, path: "OU=Groups,OU=CORP", description: Global groups - who people are (G) }
+  - { name: Resources, path: "OU=Groups,OU=CORP", description: Domain local groups - what they get (DL) }
+  - { name: Service Accounts, path: "OU=CORP", description: Service and gMSA accounts }
+
+# WinRM with NTLM gives a network logon without reusable credentials ("double hop"): calls from
+# a DC to ANOTHER DC's services (AD Web Services on 9389, LDAP) run anonymously and fail -
+# measured: Get-ADReplicationSite -Server hq-dc01 from br-dc01 fails without become, works with
+# it. runas with an explicit password creates a logon that carries credentials. "Administrator"
+# is the local account before promotion and the domain's afterwards (same password).
+ansible_become_method: runas
+ansible_become_user: Administrator
+ansible_become_password: "{{ lab_secrets.admin_password }}"

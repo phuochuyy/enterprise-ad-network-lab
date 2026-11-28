@@ -27,3 +27,15 @@ variable "lab_ssh_public_key" {
   type        = string
   default     = ""
 }
+
+variable "ws2022_core_template_vm_id" {
+  description = "VMID of the Packer Windows Server 2022 Core template (packer/windows)."
+  type        = number
+  default     = 9001
+}
+
+variable "ad_domain" {
+  description = "AD DS forest root domain (ADR-0003)."
+  type        = string
+  default     = "corp.huylab.internal"
+}

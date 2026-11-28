@@ -1,0 +1,25 @@
+# After a promotion reboot, DFSR sometimes starts before WMI is ready (event 6104 "failed to
+# register the WMI providers", then 1202 every hour): SYSVOL is never initialized, Netlogon does
+# not advertise the DC, and the DC locator - which DFSR itself needs - fails with 1355. The
+# domain looks absent (microsoft.ad.domain then even retries Install-ADDSForest). Seen on the
+# first hq-dc01 build; a DFSR restart clears it within seconds (event 4602, SysvolReady=1).
+- name: Ensure SYSVOL is shared and the DC is advertised
+  ansible.windows.win_powershell:
+    script: |
+      $Ansible.Changed = $false
+      $param = 'HKLM:\SYSTEM\CurrentControlSet\Services\Netlogon\Parameters'
+      $boot = (Get-CimInstance Win32_OperatingSystem).LastBootUpTime
+      $deadline = (Get-Date).AddMinutes(15)
+      while ($true) {
+          $ready = (Get-ItemProperty $param).SysvolReady -eq 1
+          $advertised = (nltest /dsgetdc:$env:USERDNSDOMAIN /force 2>&1 | Out-String) -match "DC: \\\\$env:COMPUTERNAME\."
+          if ($ready -and $advertised) { break }
+          if ((Get-Date) -gt $deadline) { throw "SYSVOL ready=$ready, advertised=$advertised after 15 minutes" }
+          $stuck = Get-WinEvent -FilterHashtable @{ LogName = 'DFS Replication'; Id = 6104, 1202; StartTime = $boot } -ErrorAction SilentlyContinue
+          if (-not $ready -and $stuck) {
+              Restart-Service DFSR -Force
+              $Ansible.Changed = $true
+              $boot = Get-Date # only react to new failures
+          }
+          Start-Sleep -Seconds 15
+      }
