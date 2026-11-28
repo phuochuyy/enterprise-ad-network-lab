@@ -144,6 +144,9 @@ def main(policy_file: str, report_file: str) -> int:
             dst_ip, dst_label = src["gateway"], f"firewall ({src['gateway']})"
         elif c["to"] in probes:
             dst_ip, dst_label = probes[c["to"]]["ip"], f"{c['to']} ({probes[c['to']]['ip']})"
+        elif c["to"] in policy.get("targets", {}):
+            dst_ip = policy["targets"][c["to"]]
+            dst_label = f"{c['to']} ({dst_ip})"
         else:
             dst_ip, dst_label = c["to"], c["to"]
         if c["proto"] == "path":
