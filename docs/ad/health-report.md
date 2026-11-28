@@ -21,7 +21,7 @@ report event-log history, not current health - see `roles/ad_ds/tasks/verify.yml
 ## Replication (`repadmin /replsummary` on hq-dc01)
 
 ```text
-Replication Summary Start Time: 2026-11-28 18:44:06
+Replication Summary Start Time: 2026-11-28 18:56:38
 
 Beginning data collection for replication summary, this may take awhile:
   .....
@@ -33,7 +33,7 @@ Source DSA          largest delta    fails/total %%   error
 
 
 Destination DSA     largest delta    fails/total %%   error
- BR-DC01                      :02s    0 /   5    0
+ BR-DC01                      :03s    0 /   5    0
  HQ-DC01                      :02s    0 /   5    0
 ```
 

@@ -24,7 +24,7 @@ report event-log history, not current health - see `roles/ad_ds/tasks/verify.yml
 ## Replication (`repadmin /replsummary` on {{ groups['domain_controllers'][0] }})
 
 ```text
-{{ root.ad_ds_replsummary.stdout | trim }}
+{{ root.ad_ds_replsummary.stdout | replace('\r', '') | regex_replace('[ \t]+\n', '\n') | trim }}
 ```
 
 ## OU design
