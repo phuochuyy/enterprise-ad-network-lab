@@ -75,12 +75,13 @@ jobs:
       - name: Fake credentials for validate
         run: |
           pw="$(openssl rand -hex 16)"; tok="$(openssl rand -hex 16)"
+          ssh-keygen -q -t ed25519 -N '' -C ci -f "${RUNNER_TEMP}/ci_key" # packer parses the key file
           echo "::add-mask::$pw"; echo "::add-mask::$tok"
           {
             echo "PKR_VAR_admin_password=$pw"
             echo "PKR_VAR_root_password_hash=$(openssl passwd -6 "$pw")"
-            echo "PKR_VAR_ssh_public_key=ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIC0000000000000000000000000000000000000000000 ci"
-            echo "PKR_VAR_ssh_private_key_file=/dev/null"
+            echo "PKR_VAR_ssh_public_key=$(cat "${RUNNER_TEMP}/ci_key.pub")"
+            echo "PKR_VAR_ssh_private_key_file=${RUNNER_TEMP}/ci_key"
             echo "PROXMOX_TOKEN=$tok"
             echo "PROXMOX_USERNAME=ci@pve!validate"
             echo "PROXMOX_URL=https://pve.invalid:8006/api2/json"
