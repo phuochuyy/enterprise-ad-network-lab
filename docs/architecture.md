@@ -130,6 +130,19 @@ Both DCs serve both Users scopes as a load-balance failover pair (`HQ-BRANCH-DHC
 | HQ-Users 172.16.30.0/24 | .100-.199 | 172.16.30.1 | hq-dc01, br-dc01 |
 | Branch-Users 172.17.30.0/24 | .100-.199 | 172.17.30.1 | br-dc01, hq-dc01 |
 
+### File services (AGDLP)
+
+`\\corp.huylab.internal\Shares` (DFS namespace on hq-fs01, `playbooks/file-server.yml`, role
+`ansible/roles/file_server`). Permissions only on domain local groups; people get access through
+their role group: [`docs/fileserver/access-test-report.md`](fileserver/access-test-report.md).
+
+| Folder | Modify (DL-FS-x-RW) | Read (DL-FS-x-RO) |
+| --- | --- | --- |
+| Finance | G-Finance | G-Management |
+| Sales | G-Sales | G-Management |
+| IT | G-IT-Admins | - |
+| Public | G-IT-Admins | Domain Users |
+
 ## VPN (ADR-0005)
 
 | Tunnel | Where | Port | Addresses | Carries |
