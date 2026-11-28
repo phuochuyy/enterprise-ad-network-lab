@@ -21,6 +21,10 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), versioning: [S
 - `scripts/smoke-test.sh`: clone-boot-verify acceptance test for templates (env `terraform/envs/template-smoke`)
 - `scripts/diag/win-offline-logs.sh`: read-only Setup/cloudbase-init log pull from a stopped VM's disk
 - Lint hook `check-unattend`: answer-file command lengths within Windows Setup limits
+- OPNsense template `tpl-opnsense-26.7` (Packer, unattended install from the stock DVD, QEMU guest agent)
+- Site firewalls `hq-fw01` / `br-fw01`: VLANs 10/20/30/40 (HQ) and 120/130 (Branch), deny-by-default rules, config as code (Ansible role `opnsense`, ADR-0004)
+- Sanitized exports of the running firewall configs (`docs/network/opnsense/`, `scripts/opnsense-sanitize.py`)
+- CI: `packer-validate` for OPNsense, `ansible-lint` (production profile)
 
 ### Fixed
 
