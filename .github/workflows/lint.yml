@@ -62,6 +62,7 @@ jobs:
           - { template: ws2022-desktop, dir: packer/windows, var_args: -var-file=vars/ws2022-desktop.pkrvars.hcl }
           - { template: win11, dir: packer/windows, var_args: -var-file=vars/win11.pkrvars.hcl }
           - { template: opnsense, dir: packer/opnsense, var_args: "" }
+          - { template: ubuntu, dir: packer/ubuntu, var_args: "" }
     defaults:
       run:
         working-directory: ${{ matrix.dir }}
