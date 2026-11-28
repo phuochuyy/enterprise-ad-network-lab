@@ -26,3 +26,4 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), versioning: [S
 
 - Windows clones hung at first boot: the specialize pass rejected the answer file (inline command over the 259-char `Path` limit) - see [RCA](docs/rca/2026-11-28-ws2022-clone-hang.md)
 - Windows clones kept a `WIN-XXXX` name: hostname is now read from Proxmox user_data
+- Windows 11 clones unreachable: WinRM delayed start, Public network profile, and OOBE renaming the machine to `DESKTOP-XXXX`
