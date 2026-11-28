@@ -51,3 +51,34 @@ jobs:
 
       - run: terraform init -backend=false -input=false
       - run: terraform test
+
+  packer-validate:
+    name: packer-validate
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        template: [ws2022-core, ws2022-desktop, win11]
+    defaults:
+      run:
+        working-directory: packer/windows
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: hashicorp/setup-packer@v3
+
+      # validate needs connection settings and a password; use an unroutable endpoint and
+      # throwaway random values so no secret-looking literal lives in the repo (gitleaks).
+      - name: Fake credentials for validate
+        run: |
+          pw="$(openssl rand -hex 16)"; tok="$(openssl rand -hex 16)"
+          echo "::add-mask::$pw"; echo "::add-mask::$tok"
+          {
+            echo "PKR_VAR_admin_password=$pw"
+            echo "PROXMOX_TOKEN=$tok"
+            echo "PROXMOX_USERNAME=ci@pve!validate"
+            echo "PROXMOX_URL=https://pve.invalid:8006/api2/json"
+          } >> "$GITHUB_ENV"
+
+      - run: packer init .
+      - run: packer fmt -check -diff -recursive .
+      - run: packer validate -var-file=vars/${{ matrix.template }}.pkrvars.hcl .

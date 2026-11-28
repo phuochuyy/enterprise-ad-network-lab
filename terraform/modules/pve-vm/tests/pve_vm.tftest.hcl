@@ -134,3 +134,38 @@ run "rejects_bad_disk_interface" {
 
   expect_failures = [var.disks]
 }
+
+run "windows_configdrive2_without_user" {
+  command = plan
+
+  variables {
+    template_vm_id = 9001
+    os_type        = "win11"
+    cloud_init = {
+      type        = "configdrive2"
+      ipv4_cidr   = "172.16.20.11/24"
+      gateway     = "172.16.20.1"
+      dns_servers = ["172.16.20.11"]
+    }
+  }
+
+  assert {
+    condition     = proxmox_virtual_environment_vm.this.initialization[0].type == "configdrive2"
+    error_message = "Windows clones need a configdrive2 cloud-init drive for cloudbase-init."
+  }
+
+  assert {
+    condition     = length(proxmox_virtual_environment_vm.this.initialization[0].user_account) == 0
+    error_message = "No cloud-init user for Windows (password is baked into the template)."
+  }
+}
+
+run "rejects_unknown_cloud_init_type" {
+  command = plan
+
+  variables {
+    cloud_init = { type = "nocloudx", ipv4_cidr = "dhcp" }
+  }
+
+  expect_failures = [var.cloud_init]
+}
