@@ -20,13 +20,13 @@ module "probe" {
   disks          = [{ interface = "scsi0", size_gb = 8 }]
   tags           = ["fw-test"]
 
-  network_devices = [{ bridge = each.value.bridge, vlan_id = each.value.vlan }]
+  network_devices = [{ bridge = each.value.bridge, vlan_id = try(each.value.vlan, null) }]
 
   cloud_init = {
     type        = "nocloud"
     ipv4_cidr   = "${each.value.ip}/24"
     gateway     = each.value.gateway
-    dns_servers = [each.value.gateway]
+    dns_servers = [try(each.value.dns, each.value.gateway)]
     username    = "ansible"
     ssh_keys    = var.lab_ssh_public_key == "" ? [] : [trimspace(var.lab_ssh_public_key)]
   }
