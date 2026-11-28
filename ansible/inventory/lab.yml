@@ -1,5 +1,6 @@
 # Lab inventory. VMs are created by Terraform (terraform/envs/lab); pve_vmid links each host to
-# its Proxmox VM for out-of-band access through the QEMU guest agent.
+# its Proxmox VM for out-of-band access through the QEMU guest agent. Windows hosts are reached
+# from the Proxmox host over the site firewalls' WAN (routes: scripts/host/lab-routes).
 all:
   children:
     firewalls:
@@ -10,3 +11,15 @@ all:
         br-fw01:
           ansible_host: 10.10.10.12
           pve_vmid: 102
+    windows:
+      children:
+        domain_controllers:
+          hosts:
+            hq-dc01:
+              ansible_host: 172.16.20.11
+              pve_vmid: 201
+              ad_site: HQ
+            br-dc01:
+              ansible_host: 172.17.20.11
+              pve_vmid: 202
+              ad_site: BRANCH

@@ -1,0 +1,19 @@
+# OU tree, created once on the forest root DC (replicated to every DC).
+- name: Root OU {{ ad_ou_root }}
+  microsoft.ad.ou:
+    name: "{{ ad_ou_root }}"
+    path: "{{ ad_domain_dn }}"
+    description: "{{ ad_netbios }} - every managed object lives below this OU"
+    protect_from_deletion: true
+  when: inventory_hostname == ad_forest_root_dc
+
+- name: Child OUs
+  microsoft.ad.ou:
+    name: "{{ item.name }}"
+    path: "{{ item.path }},{{ ad_domain_dn }}"
+    description: "{{ item.description }}"
+    protect_from_deletion: true
+  loop: "{{ ad_ous }}"
+  loop_control:
+    label: "OU={{ item.name }},{{ item.path }}"
+  when: inventory_hostname == ad_forest_root_dc

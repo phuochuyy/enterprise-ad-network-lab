@@ -1,0 +1,76 @@
+# Health gates: the playbook fails unless every DC passes dcdiag and replication has no failures.
+# A fresh forest needs a few minutes for SYSVOL (DFSR) and the first inter-site replication, so
+# both checks retry. Two dcdiag tests read event-log HISTORY instead of current state, so they
+# are replaced by state checks: SystemLog (any error in the last hour - every promotion reboot
+# leaves some) and DFSREvent (any DFSR error in the last 24 h - it kept failing for a day after
+# the DFSR start race in sysvol.yml was already fixed). SYSVOL health is checked below directly.
+- name: Run dcdiag (errors only)
+  ansible.windows.win_command: dcdiag /q /skip:SystemLog /skip:DFSREvent
+  register: ad_ds_dcdiag
+  changed_when: false
+  failed_when: false
+  until: ad_ds_dcdiag.rc == 0 and ad_ds_dcdiag.stdout | trim == ''
+  retries: 20
+  delay: 30
+
+- name: SYSVOL replicated folder is in state Normal
+  ansible.windows.win_powershell:
+    script: |
+      $Ansible.Changed = $false
+      $rf = Get-CimInstance -Namespace root\microsoftdfs -ClassName DfsrReplicatedFolderInfo |
+          Where-Object ReplicatedFolderName -eq 'SYSVOL Share'
+      # 0 uninitialized, 1 initialized, 2 initial sync, 3 auto recovery, 4 normal, 5 in error
+      @{ state = [int]$rf.State }
+  register: ad_ds_sysvol
+  until: ad_ds_sysvol.output[0].state == 4
+  retries: 20
+  delay: 30
+
+- name: Force a replication cycle so the summary reflects the current topology
+  ansible.windows.win_command: repadmin /syncall /AdeP
+  changed_when: false
+  failed_when: false
+
+- name: Replication summary
+  ansible.windows.win_command: repadmin /replsummary
+  register: ad_ds_replsummary
+  changed_when: false
+  until: ad_ds_replsummary.stdout is not search('\s[1-9]\d*\s*/\s*\d+')
+  retries: 10
+  delay: 30
+
+- name: DC is healthy
+  ansible.builtin.assert:
+    that:
+      - ad_ds_dcdiag.rc == 0
+      - ad_ds_dcdiag.stdout | trim == ''
+      - ad_ds_replsummary.stdout is not search('\s[1-9]\d*\s*/\s*\d+')
+      - ad_ds_sysvol.output[0].state == 4
+    fail_msg: "dcdiag: {{ ad_ds_dcdiag.stdout | trim | default('clean', true) }} | replsummary: {{ ad_ds_replsummary.stdout }}"
+    quiet: true
+
+- name: Collect the topology for the health report
+  ansible.windows.win_powershell:
+    script: |
+      $Ansible.Changed = $false
+      $links = Get-ADReplicationSiteLink -Filter * |
+          ForEach-Object { "$($_.Name) (cost $($_.Cost), $($_.ReplicationFrequencyInMinutes) min)" }
+      $zones = Get-DnsServerZone | Where-Object { -not $_.IsAutoCreated -and $_.ZoneName -ne 'TrustAnchors' } |
+          ForEach-Object { "$($_.ZoneName) ($($_.ReplicationScope))" }
+      $dcInfo = Get-ADDomainController -Identity $env:COMPUTERNAME
+      $resolvers = Get-DnsClientServerAddress -AddressFamily IPv4 | Where-Object { $_.ServerAddresses } |
+          Select-Object -First 1 -ExpandProperty ServerAddresses
+      [pscustomobject]@{
+        dc        = $env:COMPUTERNAME
+        site      = (nltest /dsgetsite)[0]
+        roles     = @($dcInfo.OperationMasterRoles | ForEach-Object { "$_" })
+        gc        = $dcInfo.IsGlobalCatalog
+        dns       = @($resolvers)
+        time      = (w32tm /query /source | Out-String).Trim()
+        sites     = @(Get-ADReplicationSite -Filter * | ForEach-Object { $_.Name })
+        subnets   = @(Get-ADReplicationSubnet -Filter * | ForEach-Object { "$($_.Name) -> $(($_.Site -split ',')[0] -replace 'CN=')" })
+        sitelinks = @($links)
+        zones     = @($zones)
+        ous       = @(Get-ADOrganizationalUnit -Filter * | Sort-Object DistinguishedName | ForEach-Object { $_.DistinguishedName })
+      }
+  register: ad_ds_topology

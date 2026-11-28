@@ -4,6 +4,7 @@
 #
 #   wireguard.keys.<name>  {private, public}  one per WireGuard instance and per road-warrior peer
 #   wireguard.psk.<name>   pre-shared key per site-to-site tunnel (post-quantum hardening)
+#   ad_dsrm_password       Directory Services Restore Mode password of the domain controllers
 set -euo pipefail
 
 SECRETS_FILE="${SECRETS_FILE:-${HOME}/.config/lab/secrets.json}"
@@ -35,7 +36,25 @@ for name in "${WG_PSKS[@]}"; do
   fi
 done
 
+# Passwords: 24 chars, all four classes, alphabet free of XML/shell-special characters.
+gen_password() {
+  python3 -c '
+import secrets, string
+a = string.ascii_letters + string.digits + "-_.@#"
+while True:
+    p = "".join(secrets.choice(a) for _ in range(24))
+    if any(c.islower() for c in p) and any(c.isupper() for c in p) and any(c.isdigit() for c in p) and any(c in "-_.@#" for c in p):
+        print(p); break'
+}
+PASSWORDS=(ad_dsrm_password)
+for name in "${PASSWORDS[@]}"; do
+  if ! jq -e --arg n "${name}" '.[$n]' "${tmp}" >/dev/null; then
+    jq --arg n "${name}" --arg pw "$(gen_password)" '.[$n] = $pw' "${tmp}" >"${tmp}.new" && mv "${tmp}.new" "${tmp}"
+    added=$((added + 1))
+  fi
+done
+
 if (( added > 0 )); then
   mv "${tmp}" "${SECRETS_FILE}"
-  echo "lab-secrets: generated ${added} WireGuard secret(s) in ${SECRETS_FILE}" >&2
+  echo "lab-secrets: generated ${added} secret(s) in ${SECRETS_FILE}" >&2
 fi

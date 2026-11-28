@@ -1,0 +1,48 @@
+# DNS on every DC: forwarders to the site firewall, reverse zones (AD-integrated, forest-wide,
+# secure dynamic updates) created once, and the client resolver order partner-first.
+- name: Forward non-AD names to the site firewall (Unbound)
+  ansible.windows.win_powershell:
+    parameters:
+      Forwarder: "{{ ad_dns_forwarder }}"
+    script: |
+      param([string]$Forwarder)
+      $ErrorActionPreference = 'Stop'
+      $current = @((Get-DnsServerForwarder).IPAddress | ForEach-Object { $_.IPAddressToString })
+      $Ansible.Changed = -not ($current.Count -eq 1 -and $current[0] -eq $Forwarder)
+      if ($Ansible.Changed) { Set-DnsServerForwarder -IPAddress $Forwarder -PassThru | Out-Null }
+
+# AD-integrated zones belong in the DNS application partitions: the domain zone domain-wide,
+# _msdcs and the reverse zones forest-wide. A promotion that ran while the partitions were not
+# yet usable leaves them in the "Legacy" domain partition (seen on the first hq-dc01 build).
+- name: Zone replication scopes and reverse lookup zones
+  ansible.windows.win_powershell:
+    parameters:
+      Domain: "{{ ad_domain }}"
+      ZonesJson: "{{ ad_reverse_zones | to_json }}"
+    script: |
+      param([string]$Domain, [string]$ZonesJson)
+      $ErrorActionPreference = 'Stop'
+      $Ansible.Changed = $false
+      $wanted = [ordered]@{ $Domain = 'Domain'; "_msdcs.$Domain" = 'Forest' }
+      foreach ($z in ($ZonesJson | ConvertFrom-Json)) { $wanted[$z] = 'Forest' }
+      foreach ($name in $wanted.Keys) {
+          $zone = Get-DnsServerZone -Name $name -ErrorAction SilentlyContinue
+          if (-not $zone) {
+              Add-DnsServerPrimaryZone -Name $name -ReplicationScope $wanted[$name] -DynamicUpdate Secure
+              $Ansible.Changed = $true
+          } elseif ("$($zone.ReplicationScope)" -ne $wanted[$name]) {
+              Set-DnsServerPrimaryZone -Name $name -ReplicationScope $wanted[$name]
+              $Ansible.Changed = $true
+          }
+      }
+  when: inventory_hostname == ad_forest_root_dc
+
+# Best practice for multiple DCs: the partner DC first, the loopback last (never only itself:
+# a DC starting before its own DNS service would not find the domain). ::1 is listed because the
+# DNS Server role re-adds it to the IPv6 resolvers - without it this task undid that every run.
+- name: Resolver order - partner DC, then itself
+  ansible.windows.win_dns_client:
+    adapter_names: "*"
+    dns_servers: >-
+      {{ groups['domain_controllers'] | difference([inventory_hostname])
+         | map('extract', hostvars, 'ansible_host') | list + ['127.0.0.1', '::1'] }}

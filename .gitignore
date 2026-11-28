@@ -55,3 +55,7 @@ ansible/build/
 # Python bytecode
 __pycache__/
 *.pyc
+
+# Ansible collections installed from ansible/requirements.yml
+ansible/collections/
+ansible/.ansible/

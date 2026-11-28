@@ -1,0 +1,29 @@
+# Additional DC in its own site: point DNS at the forest root DC, then promote. Only before the
+# promotion - afterwards dns.yml owns the resolver order (partner first), and re-pointing it here
+# on every run would flip it back and forth.
+- name: Check whether this host is already a domain controller
+  ansible.windows.win_powershell:
+    script: |
+      $Ansible.Changed = $false
+      (Get-CimInstance Win32_OperatingSystem).ProductType -eq 2 # 2 = domain controller
+  register: ad_ds_is_dc
+
+- name: Resolve the domain through the forest root DC
+  ansible.windows.win_dns_client:
+    adapter_names: "*"
+    dns_servers: ["{{ hostvars[ad_forest_root_dc].ansible_host }}"]
+  when: not ad_ds_is_dc.output[0]
+
+- name: Promote to domain controller in site {{ ad_site }}
+  microsoft.ad.domain_controller:
+    dns_domain_name: "{{ ad_domain }}"
+    domain_admin_user: "Administrator@{{ ad_domain }}"
+    domain_admin_password: "{{ lab_secrets.admin_password }}"
+    safe_mode_password: "{{ ad_dsrm_password }}"
+    site_name: "{{ ad_site }}"
+    install_dns: true
+    state: domain_controller
+    reboot: true
+
+- name: SYSVOL
+  ansible.builtin.include_tasks: sysvol.yml

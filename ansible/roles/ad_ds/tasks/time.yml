@@ -1,0 +1,15 @@
+# Forest time hierarchy: the PDC emulator syncs from the HQ firewall's NTP; every other DC and
+# member follows the domain hierarchy (NT5DS, the default).
+- name: PDC emulator syncs from the firewall NTP
+  ansible.windows.win_powershell:
+    parameters:
+      Peer: "{{ ad_pdc_ntp_peer }}"
+    script: |
+      param([string]$Peer)
+      $cfg = w32tm /query /configuration | Out-String
+      $Ansible.Changed = $cfg -notmatch "NtpServer: $([regex]::Escape($Peer))\b" -or $cfg -notmatch 'Type: NTP'
+      if ($Ansible.Changed) {
+          w32tm /config /manualpeerlist:$Peer /syncfromflags:manual /reliable:yes /update | Out-Null
+          Restart-Service w32time
+      }
+  when: inventory_hostname == ad_forest_root_dc
