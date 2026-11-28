@@ -106,6 +106,19 @@ deny = timeout, every target port has a listener), writes
 On each firewall, `vtnet0` is the site trunk (VLAN parent, no address) and `vtnet1` is the WAN.
 VLAN interfaces are `opt1..optN` in `opnsense_vlans` order.
 
+## Active Directory
+
+`scripts/ansible.sh playbooks/ad.yml` builds and verifies the forest (role `ansible/roles/ad_ds`,
+pitfalls in its README). The last run's result: [`docs/ad/health-report.md`](ad/health-report.md).
+
+| | hq-dc01 | br-dc01 |
+| --- | --- | --- |
+| Site | HQ (172.16.0.0/16) | BRANCH (172.17.0.0/16) |
+| Roles | all FSMO, GC, DNS | GC, DNS |
+| DNS forwarder | hq-fw01 (Unbound) | br-fw01 (Unbound) |
+| Resolver order | br-dc01, self | hq-dc01, self |
+| Time | hq-fw01 NTP (PDC) | domain hierarchy |
+
 ## VPN (ADR-0005)
 
 | Tunnel | Where | Port | Addresses | Carries |

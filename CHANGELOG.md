@@ -28,6 +28,8 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), versioning: [S
 - Ubuntu 24.04 template `tpl-ubuntu-2404` with qemu-guest-agent (Packer `proxmox-clone` of the Terraform-imported cloud image `base-ubuntu-2404-cloudimg`)
 - `scripts/smoke-test.sh linux`: cloud-init hostname/IP/SSH key, cloud-init done, guest agent answering the Proxmox API
 - WireGuard site-to-site HQ <-> Branch (routed, PSK) and remote-access VPN for admins on hq-fw01 (ADR-0005); handshake asserted on every converge; `scripts/lab-secrets.sh` for keys
+- AD DS forest `corp.huylab.internal`: hq-dc01 (HQ, all FSMO) and br-dc01 (BRANCH) via Terraform + Ansible role `ad_ds` - Sites and Services, DNS forwarders and reverse zones, PDC time from the firewall, OU design (tiered admin, per-site, AGDLP); health gates (dcdiag, SYSVOL, repadmin) and `docs/ad/health-report.md`
+- `scripts/host/lab-routes`: host routes into the site supernets via the firewall WANs (ifupdown hook)
 - Firewall policy test (`scripts/fw-policy-test.sh`, `tests/firewall/policy.yml`): 57 cases: inter-VLAN, cross-site over the tunnel, WAN exposure, remote-access VPN, TCP traceroute through the tunnel; real traffic from probe VMs, report in `docs/network/policy-test-report.md`
 
 ### Fixed
